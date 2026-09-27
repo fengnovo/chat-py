@@ -1,0 +1,168 @@
+.modal-layer {
+  align-items: center;
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  padding: 24px;
+  position: fixed;
+  z-index: 80;
+}
+
+.modal-scrim {
+  background: rgb(18 15 28 / 48%);
+  border: 0;
+  inset: 0;
+  padding: 0;
+  position: absolute;
+}
+
+.modal-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 15px;
+  box-shadow: 0 30px 80px rgb(24 19 39 / 24%);
+  max-height: min(760px, calc(100dvh - 48px));
+  overflow-y: auto;
+  padding: 24px;
+  position: relative;
+  width: min(620px, 100%);
+  z-index: 1;
+}
+
+.session-dialog {
+  width: min(450px, 100%);
+}
+
+.modal-head {
+  align-items: flex-start;
+  display: flex;
+  gap: 18px;
+  justify-content: space-between;
+}
+
+.modal-head > div {
+  min-width: 0;
+}
+
+.modal-head span {
+  color: var(--violet);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 750;
+  letter-spacing: 0.13em;
+}
+
+.modal-head h2 {
+  font-size: 21px;
+  letter-spacing: -0.025em;
+  line-height: 1.3;
+  margin: 7px 0 0;
+}
+
+.modal-head p {
+  color: var(--ink-muted);
+  font-size: 12px;
+  line-height: 1.6;
+  margin: 7px 0 0;
+}
+
+.modal-close {
+  align-items: center;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink-muted);
+  display: flex;
+  flex: 0 0 auto;
+  height: 36px;
+  justify-content: center;
+  padding: 0;
+  width: 36px;
+}
+
+.modal-close:hover {
+  background: var(--surface-soft);
+  color: var(--ink);
+}
+
+.dialog-form {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  margin-top: 18px;
+}
+
+.dialog-form label {
+  color: var(--ink);
+  display: flex;
+  flex-direction: column;
+  font-size: 12px;
+  font-weight: 650;
+  gap: 7px;
+}
+
+.dialog-form label > span {
+  color: var(--ink-muted);
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.dialog-form input {
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  font-size: 13px;
+  min-height: 43px;
+  padding: 0 12px;
+}
+
+.dialog-form input:hover {
+  border-color: #bbb0f8;
+}
+
+.delete-copy {
+  color: var(--ink-muted);
+  font-size: 12px;
+  line-height: 1.65;
+  margin: 0;
+}
+
+.dialog-actions {
+  display: flex;
+  gap: 9px;
+  justify-content: flex-end;
+  margin-top: 22px;
+}
+
+.dialog-actions button {
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  min-height: 40px;
+  padding: 0 15px;
+}
+
+.dialog-actions .secondary-action {
+  border-color: var(--line-strong);
+  color: var(--ink-soft);
+}
+
+.danger-action {
+  background: var(--red);
+  border: 1px solid var(--red);
+  color: white;
+}
+
+.delete-copy {
+  margin-top: 17px;
+}
+
+.dialog-error {
+  background: var(--red-soft);
+  border-radius: 7px;
+  color: var(--red);
+  font-size: 11px;
+  line-height: 1.55;
+  margin: 14px 0 0;
+  padding: 9px 11px;
+}

@@ -1,0 +1,32 @@
+[Unit]
+Description=Chat Agent API (Fastify + SSE)
+Documentation=file:///opt/chat/deploy/README.md
+After=network-online.target docker.service
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=simple
+User=chatapp
+Group=chatapp
+WorkingDirectory=/opt/chat
+EnvironmentFile=/opt/chat/.env
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=NODE_ENV=production
+# 覆盖 .env 中通用的 OTEL_SERVICE_NAME；遥测在业务模块前通过 --import 预初始化
+Environment=OTEL_SERVICE_NAME=agent-api
+# 启动时会自动执行数据库迁移，所以必须在 Postgres 就绪之后
+ExecStartPre=/bin/bash -c 'until docker compose -f /opt/chat/deploy/compose.infra.yaml --env-file /opt/chat/.env exec -T postgres pg_isready -U agent -d agent >/dev/null 2>&1; do sleep 2; done'
+# --import 必须在业务入口之前加载；OTEL_ENABLED=false 时预载为 no-op，开销可忽略
+ExecStart=/usr/bin/node --import /opt/chat/packages/observability/dist/register.js /opt/chat/apps/api/dist/server.js
+Restart=always
+RestartSec=3
+# 遥测 flush 上限 5s，15s 留出业务关闭与调度余量
+TimeoutStopSec=15
+StandardOutput=journal
+StandardError=journal
+NoNewPrivileges=yes
+LimitNOFILE=65535
+
+[Install]
+WantedBy=multi-user.target

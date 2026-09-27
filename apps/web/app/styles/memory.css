@@ -1,0 +1,95 @@
+.memory-page {
+  min-height: 100vh;
+  background: #f7f8fa;
+  color: #20242b;
+}
+
+.memory-card {
+  max-width: 900px;
+  margin: 24px auto;
+  background: #fff;
+  border: 1px solid #e5e8ee;
+  border-radius: 16px;
+  padding: 22px;
+  box-shadow: 0 8px 28px #1c25300d;
+}
+
+.memory-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #edf0f3;
+  padding-bottom: 16px;
+}
+
+.memory-card-head button,
+.memory-row button {
+  border: 0;
+  background: none;
+  color: #c34f58;
+  cursor: pointer;
+}
+
+.memory-card-head button:disabled {
+  color: #b7bcc4;
+  cursor: not-allowed;
+}
+
+.memory-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 17px 0;
+  border-bottom: 1px solid #f0f1f4;
+}
+
+.memory-row-main {
+  flex: 1;
+}
+
+.memory-row p {
+  margin: 6px 0;
+  color: #303641;
+}
+
+.memory-row small,
+.memory-muted {
+  color: #89919d;
+}
+
+.memory-kind {
+  font-size: 11px;
+  color: #6b7280;
+  background: #f1f2f6;
+  border-radius: 5px;
+  padding: 3px 7px;
+}
+
+.memory-error {
+  color: #c34f58;
+}
+
+.memory-row-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.memory-edit textarea {
+  display: block;
+  width: 100%;
+  min-height: 70px;
+  margin-top: 8px;
+  border: 1px solid #d9dde5;
+  border-radius: 8px;
+  padding: 8px;
+}
+
+.memory-edit div {
+  display: flex;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.memory-edit button {
+  color: #5363c8;
+}

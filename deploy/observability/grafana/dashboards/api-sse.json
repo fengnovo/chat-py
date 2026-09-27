@@ -1,0 +1,370 @@
+{
+  "uid": "chat-api-sse",
+  "title": "Chat · API & SSE",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": false,
+  "style": "dark",
+  "timezone": "browser",
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "refresh": "30s",
+  "tags": [
+    "chat",
+    "observability"
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "route",
+        "type": "query",
+        "label": "Route",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "query": {
+          "query": "label_values(http_server_requests_total{job=\"agent-api\"}, http_route)",
+          "refId": "var-route"
+        },
+        "multi": true,
+        "includeAll": true,
+        "refresh": 2,
+        "sort": 1
+      },
+      {
+        "name": "quantile",
+        "type": "custom",
+        "label": "Quantile",
+        "query": "0.50 : 0.50,0.95 : 0.95,0.99 : 0.99",
+        "current": {
+          "text": "0.95",
+          "value": "0.95"
+        },
+        "options": [
+          {
+            "text": "0.50",
+            "value": "0.50",
+            "selected": false
+          },
+          {
+            "text": "0.95",
+            "value": "0.95",
+            "selected": true
+          },
+          {
+            "text": "0.99",
+            "value": "0.99",
+            "selected": false
+          }
+        ],
+        "multi": false,
+        "includeAll": false
+      }
+    ]
+  },
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "请求速率（按路由）",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "mean"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by (http_route) (rate(http_server_requests_total{job=\"agent-api\",http_route=~\"$route\"}[5m]))",
+          "range": true,
+          "legendFormat": "{{http_route}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "5xx 速率（按路由）",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "mean"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by (http_route) (rate(http_server_requests_total{job=\"agent-api\",http_response_status_class=~\"5xx|other\",http_route=~\"$route\"}[5m])) or vector(0)",
+          "range": true,
+          "legendFormat": "{{http_route}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "HTTP 延迟（非 SSE）",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 8,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "mean"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "histogram_quantile($quantile, sum by (le, http_route) (rate(http_server_duration_seconds_bucket{job=\"agent-api\",http_route!~\".*/events\",http_route=~\"$route\"}[5m])))",
+          "range": true,
+          "legendFormat": "{{http_route}} p$quantile"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "SSE 首字节延迟",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 8,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "mean"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "histogram_quantile($quantile, sum by (le, operation) (rate(sse_first_byte_duration_seconds_bucket{job=\"agent-api\"}[5m])))",
+          "range": true,
+          "legendFormat": "{{operation}} p$quantile"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "SSE 活跃连接",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 16,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "mean"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by (operation) (sse_connection_active{job=\"agent-api\"})",
+          "range": true,
+          "legendFormat": "{{operation}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "SSE 异常断连速率（按原因）",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 16,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "mean"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by (reason) (rate(sse_disconnects_total{job=\"agent-api\",reason=~\"server|error|timeout\"}[5m])) or vector(0)",
+          "range": true,
+          "legendFormat": "{{reason}}"
+        }
+      ]
+    },
+    {
+      "type": "table",
+      "title": "路由 RED 一览（5m）",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 24,
+        "w": 24,
+        "h": 8
+      },
+      "options": {
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by (http_route) (rate(http_server_requests_total{job=\"agent-api\"}[5m]))",
+          "range": true,
+          "instant": true,
+          "format": "table"
+        }
+      ]
+    }
+  ]
+}

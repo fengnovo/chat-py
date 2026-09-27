@@ -1,0 +1,82 @@
+:root {
+  --ink: #16151c;
+  --ink-soft: #615e6b;
+  --ink-muted: #696573;
+  --paper: #f7f6f8;
+  --surface: #ffffff;
+  --surface-soft: #f0eef3;
+  --line: #e4e1e8;
+  --line-strong: #d6d1dc;
+  --violet: #6d4aff;
+  --violet-dark: #5634dc;
+  --violet-soft: #eeeaff;
+  --green: #158b62;
+  --green-soft: #e5f5ef;
+  --amber: #a86612;
+  --amber-soft: #fff1d8;
+  --red: #c43b4d;
+  --red-soft: #fff0f2;
+  --sidebar: #f5f4f8;
+  --sidebar-soft: #ffffff;
+  --sidebar-line: #ddd9e3;
+  --shadow-sm: 0 1px 2px rgb(23 20 31 / 5%);
+  --shadow-md: 0 12px 32px rgb(23 20 31 / 9%);
+  --font-sans: Inter, "SF Pro Text", "Segoe UI", "PingFang TC",
+    "PingFang SC", "Microsoft JhengHei", sans-serif;
+  --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  /* 整个应用是固定高度的 App Shell，滚动只发生在会话/侧栏容器内；
+     禁止窗口级滚动，避免处理中页面被滚走、底部露出大片空白。 */
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+button,
+input,
+textarea {
+  color: inherit;
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible {
+  outline: 3px solid rgb(109 74 255 / 24%);
+  outline-offset: 2px;
+}
+
+button:disabled,
+input:disabled,
+textarea:disabled {
+  cursor: not-allowed;
+}
+
+.sr-only {
+  clip: rect(0, 0, 0, 0);
+  clip-path: inset(50%);
+  height: 1px;
+  overflow: hidden;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
+}

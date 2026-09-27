@@ -1,0 +1,49 @@
+# Alertmanager：三级路由 page / urgent / ticket。
+#
+# 启动参数带 --config.expand-env（见 compose.observability.yaml），
+# webhook URL 从容器环境变量注入，配置文件里不允许出现任何 token。
+# 未配置对应 *_WEBHOOK_URL 时，该级别通知静默丢弃（本地 PoC 默认行为）。
+global:
+  resolve_timeout: 5m
+
+route:
+  receiver: ticket
+  group_by: ["service", "alertname", "severity"]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+  routes:
+    - matchers: [severity="page"]
+      receiver: page
+      group_wait: 10s
+      repeat_interval: 30m
+      continue: false
+    - matchers: [severity="urgent"]
+      receiver: urgent
+      repeat_interval: 2h
+    - matchers: [severity="ticket"]
+      receiver: ticket
+
+# 抑制：page 已触发时，同一 service 的 urgent/ticket 不重复打扰。
+inhibit_rules:
+  - source_matchers: [severity="page"]
+    target_matchers: [severity=~"urgent|ticket"]
+    equal: ["service", "alertname"]
+  - source_matchers: [severity="urgent"]
+    target_matchers: [severity="ticket"]
+    equal: ["service", "alertname"]
+
+receivers:
+  - name: page
+    webhook_configs:
+      # 部署时通过 -e PAGE_WEBHOOK_URL='https://...' 注入
+      - url: "${PAGE_WEBHOOK_URL}"
+        send_resolved: true
+  - name: urgent
+    webhook_configs:
+      - url: "${URGENT_WEBHOOK_URL}"
+        send_resolved: true
+  - name: ticket
+    webhook_configs:
+      - url: "${TICKET_WEBHOOK_URL}"
+        send_resolved: false

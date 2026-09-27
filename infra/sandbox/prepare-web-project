@@ -1,0 +1,47 @@
+#!/bin/sh
+set -eu
+
+target="${1:-website}"
+
+# 项目目标只能位于容器当前工作目录，避免帮助脚本主动创建越界路径。
+case "$target" in
+  /*|.|..|*../*|*/..|*/../*|*\ *)
+    echo "项目目录必须是当前工作区下不含空格或 .. 的相对路径" >&2
+    exit 2
+    ;;
+esac
+
+mkdir -p "$target"
+
+# 不覆盖模型或用户已经准备的依赖目录；复用镜像依赖是显式的一次性操作。
+if [ -e "$target/node_modules" ] || [ -L "$target/node_modules" ]; then
+  echo "项目已经存在 node_modules：$target" >&2
+  exit 2
+fi
+
+ln -s /opt/chat-web-runtime/node_modules "$target/node_modules"
+
+# 这里只补充构建元数据，不创建 index.html、组件、业务逻辑或样式。
+if [ ! -e "$target/package.json" ]; then
+  printf '%s\n' \
+    '{' \
+    '  "name": "sandbox-website",' \
+    '  "version": "1.0.0",' \
+    '  "private": true,' \
+    '  "type": "module",' \
+    '  "scripts": {' \
+    '    "dev": "vite --host 0.0.0.0",' \
+    '    "build": "vite build --base ./",' \
+    '    "preview": "vite preview --host 0.0.0.0"' \
+    '  },' \
+    '  "dependencies": {' \
+    '    "@vitejs/plugin-react": "5.0.4",' \
+    '    "vite": "7.1.7",' \
+    '    "react": "19.2.8",' \
+    '    "react-dom": "19.2.8"' \
+    '  }' \
+    '}' > "$target/package.json"
+fi
+
+echo "已为项目连接离线 Web 运行时：$target"
+echo "请由 Agent 自行创建 index.html、src 和配置文件，然后运行 npm run build。"

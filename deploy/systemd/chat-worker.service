@@ -1,0 +1,31 @@
+[Unit]
+Description=Chat Agent Worker (BullMQ + Docker sandbox)
+Documentation=file:///opt/chat/deploy/README.md
+After=network-online.target docker.service chat-api.service
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=simple
+User=chatapp
+Group=chatapp
+# 需要访问 /var/run/docker.sock 来创建沙箱容器
+SupplementaryGroups=docker
+WorkingDirectory=/opt/chat
+EnvironmentFile=/opt/chat/.env
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=NODE_ENV=production
+# 覆盖 .env 中通用的 OTEL_SERVICE_NAME；只有 Worker 会建 Langfuse GenAI callback
+Environment=OTEL_SERVICE_NAME=agent-worker
+ExecStart=/usr/bin/node --import /opt/chat/packages/observability/dist/register.js /opt/chat/apps/worker/dist/worker.js
+Restart=always
+RestartSec=5
+# SIGTERM 后先暂停领取新任务、abort 在途任务，再 flush 遥测（上限 5s）
+TimeoutStopSec=15
+StandardOutput=journal
+StandardError=journal
+NoNewPrivileges=yes
+LimitNOFILE=65535
+
+[Install]
+WantedBy=multi-user.target

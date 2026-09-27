@@ -1,0 +1,44 @@
+{
+  "name": "chat",
+  "version": "1.0.0",
+  "private": true,
+  "description": "",
+  "scripts": {
+    "setup": "pnpm install && cd python && uv sync --all-packages",
+    "dev": "sh scripts/dev-start.sh",
+    "dev:stop": "sh scripts/dev-stop.sh",
+    "dev:web": "pnpm --filter web dev",
+    "desktop:dev": "pnpm --filter @repo/desktop dev",
+    "desktop:start": "pnpm --filter @repo/desktop start",
+    "desktop:typecheck": "pnpm --filter @repo/desktop typecheck",
+    "desktop:test": "pnpm --filter @repo/desktop test",
+    "desktop:build": "pnpm --filter @repo/desktop build",
+    "desktop:dist": "pnpm --filter @repo/desktop dist",
+    "desktop:dist:mac": "pnpm --filter @repo/desktop dist:mac",
+    "desktop:dist:win": "pnpm --filter @repo/desktop dist:win",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "infra:up": "docker compose -f infra/compose.yaml up -d --wait",
+    "infra:down": "docker compose -f infra/compose.yaml down",
+    "db:migrate": "cd python && uv run --no-sync python -c \"import asyncio; from db.migrate import main; asyncio.run(main())\""
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "11.24.0",
+      "onFail": "download"
+    }
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.0",
+    "turbo": "^2.10.12",
+    "typescript": "^5.9.2"
+  },
+  "packageManager": "pnpm@11.24.0",
+  "type": "module"
+}

@@ -1,0 +1,55 @@
+# ---- 构建产物 ----
+build/
+dist/
+.turbo/
+apps/web/.next/
+apps/desktop/release/
+
+# ---- 依赖 ----
+node_modules/
+.pnpm-store/
+
+# ---- Python ----
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.python-version
+
+# ---- 环境与密钥 ----
+.env
+.env.local
+deploy/env.*
+!deploy/env.*.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.cer
+*.jks
+id_rsa
+id_rsa.pub
+id_ed25519
+id_ed25519.pub
+
+# ---- 运行时数据 / 日志 ----
+logs/
+*.log
+/data/
+workspace/
+sessions/
+
+# ---- 测试与工具 ----
+coverage/
+apps/web/playwright-report/
+apps/web/test-results/
+.worktrees/
+.superpowers/
+.trae/
+
+# ---- 系统 ----
+.DS_Store

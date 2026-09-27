@@ -1,0 +1,207 @@
+// Grafana Alloy —— 本地观测采集器（方案 3）
+//
+// 数据通路：
+//   应用(OTLP 4317/4318) -> memory_limiter -> batch
+//     ├─ traces  -> Tempo   (otelcol.exporter.otlphttp)
+//     ├─ metrics -> Prometheus remote-write (otelcol.exporter.prometheus)
+//     └─ logs    -> Loki    (otelcol.exporter.loki)
+// 宿主机 systemd journal / Docker 容器日志另行走 loki.* 组件入 Loki。
+//
+// 故障原则：collector 停止时 SDK 只会丢弃遥测（fail-open），不阻断业务；
+// 所有下游均为内部 DNS，无公网 endpoint。
+
+// ---------------------------------------------------------------------------
+// 1) OTLP 接收：gRPC 4317 / HTTP 4318，仅监听容器内（端口映射绑定 loopback）。
+// ---------------------------------------------------------------------------
+otelcol.receiver.otlp "default" {
+	grpc {
+		endpoint = "0.0.0.0:4317"
+	}
+
+	http {
+		endpoint = "0.0.0.0:4318"
+	}
+
+	output {
+		metrics = [otelcol.processor.memory_limiter.default.input]
+		logs    = [otelcol.processor.memory_limiter.default.input]
+		traces  = [otelcol.processor.memory_limiter.default.input]
+	}
+}
+
+// ---------------------------------------------------------------------------
+// 2) 背压保护：内存触顶时拒绝数据而不是 OOM 拖垮宿主。
+//    容器内存上限 512MiB（compose），此处保留 headroom。
+// ---------------------------------------------------------------------------
+otelcol.processor.memory_limiter "default" {
+	check_interval         = "1s"
+	limit                  = "320MiB"
+	spike_limit_percentage = 20
+
+	output {
+		metrics = [otelcol.processor.batch.default.input]
+		logs    = [otelcol.processor.batch.default.input]
+		traces  = [otelcol.processor.batch.default.input]
+	}
+}
+
+otelcol.processor.batch "default" {
+	timeout             = "5s"
+	send_batch_size     = 1024
+	send_batch_max_size = 4096
+
+	output {
+		metrics = [otelcol.exporter.prometheus.default.input]
+		logs    = [otelcol.exporter.loki.default.input]
+		traces  = [otelcol.exporter.otlphttp.tempo.input]
+	}
+}
+
+// ---------------------------------------------------------------------------
+// 3) Exporters
+// ---------------------------------------------------------------------------
+
+// traces -> Tempo（OTLP HTTP，Tempo distributor 在 4318 接收）
+otelcol.exporter.otlphttp "tempo" {
+	client {
+		endpoint = "http://tempo:4318"
+	}
+
+	sending_queue {
+		enabled       = true
+		num_consumers = 4
+		queue_size    = 2000
+	}
+
+	retry_on_failure {
+		enabled          = true
+		initial_interval = "5s"
+		max_interval     = "30s"
+		max_elapsed_time = "300s"
+	}
+}
+
+// metrics -> Prometheus remote-write（prometheus 启动需开启 remote-write-receiver）
+otelcol.exporter.prometheus "default" {
+	forward_to = [prometheus.remote_write.default.receiver]
+}
+
+prometheus.remote_write "default" {
+	external_labels = {
+		deployment  = "chat",
+		environment = "local",
+	}
+
+	endpoint {
+		url = "http://prometheus:9090/api/v1/write"
+
+		queue_config {
+			capacity             = 10000
+			max_shards           = 8
+			min_shards           = 1
+			max_samples_per_send = 2000
+			batch_send_deadline  = "5s"
+		}
+	}
+}
+
+// OTel logs（SDK 结构化日志）-> Loki
+otelcol.exporter.loki "default" {
+	forward_to = [loki.write.default.receiver]
+}
+
+// 宿主 journal / Docker 容器日志共用同一个 Loki writer
+loki.write "default" {
+	endpoint {
+		url = "http://loki:3100/loki/api/v1/push"
+	}
+}
+
+// ---------------------------------------------------------------------------
+// 4) 宿主日志采集（systemd journal + Docker 容器日志）
+//    compose 已只读挂载 /var/log/journal、/var/lib/docker/containers 与
+//    /var/run/docker.sock；在无 journal 的宿主上该组件自动空转，不影响其余管线。
+// ---------------------------------------------------------------------------
+loki.process "journal" {
+	stage.static_labels {
+		values = {
+			deployment  = "chat",
+			environment = "local",
+			source      = "journal",
+		}
+	}
+	forward_to = [loki.write.default.receiver]
+}
+
+loki.source.journal "system" {
+	max_age       = "2h"
+	relabel_rules = loki.relabel.journal.rules
+	forward_to    = [loki.relabel.journal.receiver]
+}
+
+loki.relabel "journal" {
+	rule {
+		source_labels = ["__journal__systemd_unit"]
+		target_label  = "unit"
+	}
+
+	rule {
+		source_labels = ["__journal__hostname"]
+		target_label  = "host"
+	}
+	forward_to = [loki.process.journal.receiver]
+}
+
+discovery.docker "containers" {
+	host = "unix:///var/run/docker.sock"
+}
+
+discovery.relabel "containers" {
+	targets = discovery.docker.containers.targets
+
+	// 只采本项目栈（chat-observability / chat-infra）的容器日志，
+	// 避免吞入宿主上其它项目的历史日志。
+	rule {
+		source_labels = ["__meta_docker_container_label_com_docker_compose_project"]
+		regex         = "chat-(observability|infra)"
+		action        = "keep"
+	}
+
+	rule {
+		source_labels = ["__meta_docker_container_name"]
+		regex         = "/(.*)"
+		target_label  = "container_name"
+	}
+
+	rule {
+		source_labels = ["__meta_docker_container_log_stream"]
+		target_label  = "stream"
+	}
+}
+
+loki.process "containers" {
+	stage.static_labels {
+		values = {
+			deployment  = "chat",
+			environment = "local",
+			source      = "docker",
+		}
+	}
+	forward_to = [loki.write.default.receiver]
+}
+
+loki.source.docker "containers" {
+	host       = "unix:///var/run/docker.sock"
+	targets    = discovery.relabel.containers.output
+	forward_to = [loki.process.containers.receiver]
+}
+
+// ---------------------------------------------------------------------------
+// 5) Alloy 自监控：把自身 /metrics 也送进 Prometheus。
+// ---------------------------------------------------------------------------
+prometheus.scrape "alloy" {
+	targets = [{
+		__address__ = "127.0.0.1:12345",
+	}]
+	forward_to = [prometheus.remote_write.default.receiver]
+}

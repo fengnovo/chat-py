@@ -1,0 +1,26 @@
+{
+  "mcpServers": {
+    "firecrawl": {
+      "type": "http",
+      "url": "https://mcp.firecrawl.dev/v2/mcp",
+      "defaultToolTimeout": 45000,
+      "headers": {
+        "Authorization": "Bearer ${FIRECRAWL_API_KEY}"
+      }
+    },
+    "anysearch": {
+      "type": "http",
+      "url": "https://api.anysearch.com/mcp",
+      "headers": {
+        "Authorization": "Bearer ${ANYSEARCH_API_KEY}"
+      }
+    },
+    "dev": {
+      "firecrawl": {
+        "type": "http",
+        "url": "http://localhost:3089/mcp",
+        "defaultToolTimeout": 45000
+      }
+    }
+  }
+}

@@ -1,0 +1,67 @@
+.is-loading {
+  pointer-events: none;
+}
+
+.skeleton-panel,
+.skeleton-line,
+.skeleton-orb,
+.skeleton-copy {
+  animation: skeleton-pulse 1.4s ease-in-out infinite;
+}
+
+.skeleton-panel {
+  opacity: 0.94;
+}
+
+.skeleton-center {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.skeleton-orb {
+  background: #ece9f4;
+  border-radius: 22px;
+  height: 62px;
+  width: 62px;
+}
+
+.skeleton-copy {
+  background: #eceaf0;
+  border-radius: 999px;
+  height: 10px;
+  margin-top: 22px;
+  width: 260px;
+}
+
+.skeleton-copy.short {
+  margin-top: 10px;
+  width: 180px;
+}
+
+@keyframes dot-wave {
+  0%,
+  60%,
+  100% {
+    opacity: 0.35;
+    transform: translateY(0);
+  }
+  30% {
+    opacity: 1;
+    transform: translateY(-3px);
+  }
+}
+
+@keyframes status-pulse {
+  50% {
+    box-shadow: 0 0 0 5px rgb(109 74 255 / 10%);
+    opacity: 0.68;
+  }
+}
+
+@keyframes skeleton-pulse {
+  50% {
+    opacity: 0.58;
+  }
+}

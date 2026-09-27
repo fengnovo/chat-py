@@ -1,0 +1,231 @@
+.trace-panel {
+  background: #fbfafc;
+  border-left: 1px solid var(--line);
+  display: none;
+  min-width: 0;
+  overflow-y: auto;
+  padding: 24px 22px;
+  scrollbar-color: #d8d4dd transparent;
+}
+
+.app-shell.is-trace-open > .trace-panel {
+  display: block;
+}
+
+.trace-head {
+  align-items: flex-start;
+  display: flex;
+  justify-content: space-between;
+}
+
+.trace-head h2 {
+  font-size: 20px;
+  letter-spacing: -0.025em;
+  margin: 7px 0 0;
+}
+
+.trace-summary {
+  border-bottom: 1px solid var(--line);
+  border-top: 1px solid var(--line);
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  margin-top: 20px;
+  padding: 14px 0;
+}
+
+.trace-summary > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.trace-summary span {
+  color: var(--ink-muted);
+  font-size: 10px;
+}
+
+.trace-summary strong {
+  color: var(--green);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+}
+
+.trace-list {
+  list-style: none;
+  margin: 24px 0 0;
+  padding: 0;
+}
+
+.trace-item {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 22px minmax(0, 1fr);
+  min-height: 74px;
+}
+
+.trace-line {
+  display: flex;
+  justify-content: center;
+  position: relative;
+}
+
+.trace-node {
+  align-items: center;
+  background: var(--green-soft);
+  border: 1px solid #b7dfd0;
+  border-radius: 999px;
+  color: var(--green);
+  display: flex;
+  height: 21px;
+  justify-content: center;
+  position: relative;
+  width: 21px;
+  z-index: 1;
+}
+
+.trace-rail {
+  background: var(--line);
+  height: calc(100% - 13px);
+  left: 50%;
+  position: absolute;
+  top: 20px;
+  transform: translateX(-50%);
+  width: 1px;
+}
+
+.trace-item.is-warning .trace-node {
+  background: var(--amber-soft);
+  border-color: #efd29d;
+  color: var(--amber);
+}
+
+.trace-item.is-error .trace-node {
+  background: var(--red-soft);
+  border-color: #efc2c9;
+  color: var(--red);
+}
+
+.trace-item.is-running .trace-node {
+  background: var(--violet-soft);
+  border-color: #cfc5ff;
+}
+
+.pulse-dot {
+  animation: status-pulse 1.1s ease-in-out infinite;
+  background: var(--violet);
+  border-radius: 999px;
+  height: 6px;
+  width: 6px;
+}
+
+.trace-title {
+  align-items: baseline;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.trace-title strong {
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.35;
+}
+
+.trace-title time {
+  color: var(--ink-muted);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+}
+
+.trace-item p {
+  color: var(--ink-soft);
+  font-size: 11px;
+  line-height: 1.55;
+  margin: 4px 0 5px;
+}
+
+.trace-item code {
+  color: var(--violet);
+  font-family: var(--font-mono);
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.trace-capabilities {
+  border-top: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 8px;
+  padding-top: 19px;
+}
+
+.trace-capabilities .nav-label {
+  color: var(--ink-muted);
+  display: block;
+  margin-bottom: 8px;
+  margin-left: 0;
+}
+
+.cap-grid {
+  display: grid;
+  gap: 6px 16px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.cap-grid > div {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+  min-height: 22px;
+}
+
+.cap-grid span {
+  color: var(--ink-muted);
+  font-size: 10px;
+}
+
+.cap-grid code {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cap-compressing {
+  color: var(--violet);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  grid-column: 1 / -1;
+}
+
+.cap-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.cap-chips code {
+  background: var(--surface-soft);
+  border-radius: 5px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  max-width: 100%;
+  overflow: hidden;
+  padding: 4px 8px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.trace-scrim {
+  display: none;
+}
+
+.trace-close-button {
+  display: flex;
+}

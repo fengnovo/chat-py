@@ -1,0 +1,85 @@
+name: chat-agent
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: agent
+      POSTGRES_USER: agent
+      POSTGRES_PASSWORD: agent
+    ports:
+      - "55432:5432"
+    volumes:
+      - agent-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U agent -d agent"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+
+  postgres-test:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: agent_test
+      POSTGRES_USER: agent
+      POSTGRES_PASSWORD: agent
+    ports:
+      - "55433:5432"
+    volumes:
+      - agent-postgres-test:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U agent -d agent_test"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7.4-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "56379:6379"
+    volumes:
+      - agent-redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    ports:
+      - "56333:6333"
+    volumes:
+      - agent-qdrant:/qdrant/storage
+    healthcheck:
+      # qdrant/qdrant does not ship wget/curl; use the image's bash TCP client
+      # to verify the REST endpoint is accepting a successful health response.
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/localhost/6333; printf \"GET /healthz HTTP/1.0\\r\\nHost: localhost\\r\\n\\r\\n\" >&3; grep -q \"200 OK\" <&3'"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: agent
+      MINIO_ROOT_PASSWORD: agent-local-secret
+    ports:
+      - "59000:9000"
+      - "59001:9001"
+    volumes:
+      - agent-minio:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  agent-postgres:
+  agent-postgres-test:
+  agent-redis:
+  agent-qdrant:
+  agent-minio:

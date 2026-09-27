@@ -1,0 +1,29 @@
+[project]
+name = "knowledge-service"
+version = "0.1.0"
+description = "Knowledge Service — GraphRAG 检索 / 索引消费者 / MCP 服务（TS apps/knowledge-service 的 Python 迁移版）"
+requires-python = ">=3.13"
+dependencies = [
+    "arq>=0.26",
+    "redis>=5.2",
+    "httpx>=0.28",
+    "uvicorn[standard]>=0.32",
+    "pydantic>=2.10",
+    "pydantic-settings>=2.7",
+    "python-jose[cryptography]>=3.3",
+    "llama-index",
+    "qdrant-client",
+    "mcp",
+    "contracts",
+    "db",
+    "artifacts",
+    "observability",
+    "knowledge-graphrag",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/knowledge_service"]

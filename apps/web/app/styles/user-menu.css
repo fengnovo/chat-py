@@ -1,0 +1,234 @@
+/* 右上角头像与悬停账号浮层（聊天顶栏 / 知识库页 / 用户管理页共用） */
+.user-badge {
+  position: relative;
+  display: inline-flex;
+  z-index: 60;
+}
+
+.user-badge-trigger {
+  align-items: center;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--ink-soft);
+  display: inline-flex;
+  gap: 8px;
+  padding: 3px 10px 3px 3px;
+  transition: border-color 160ms ease, box-shadow 160ms ease, color 160ms ease;
+}
+
+.user-badge-trigger:hover {
+  border-color: var(--line-strong);
+  color: var(--ink);
+}
+
+.user-badge.is-open .user-badge-trigger,
+.user-badge-trigger:focus-visible {
+  border-color: var(--violet);
+  box-shadow: 0 0 0 3px rgb(109 74 255 / 14%);
+}
+
+.user-badge-avatar {
+  align-items: center;
+  background: var(--violet-soft);
+  border-radius: 50%;
+  color: var(--violet-dark);
+  display: inline-flex;
+  flex: none;
+  height: 34px;
+  justify-content: center;
+  width: 34px;
+}
+
+.user-badge-avatar.is-lg {
+  height: 42px;
+  width: 42px;
+}
+
+.user-badge-avatar-img {
+  border-radius: 50%;
+  height: 100%;
+  object-fit: cover;
+  width: 100%;
+}
+
+.user-badge-name {
+  font-size: 13px;
+  font-weight: 600;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 透明桥接，避免头像与浮层之间出现缝隙导致 hover 中断 */
+.user-badge-popover {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: var(--shadow-md);
+  display: grid;
+  gap: 4px;
+  min-width: 232px;
+  opacity: 0;
+  padding: 14px;
+  pointer-events: none;
+  position: absolute;
+  right: 0;
+  top: calc(100% + 10px);
+  transform: translateY(-4px);
+  transition: opacity 140ms ease, transform 140ms ease, visibility 140ms;
+  visibility: hidden;
+}
+
+.user-badge-popover::before {
+  content: '';
+  height: 12px;
+  left: 0;
+  position: absolute;
+  right: 0;
+  top: -12px;
+}
+
+.user-badge:hover .user-badge-popover,
+.user-badge:focus-within .user-badge-popover,
+.user-badge.is-open .user-badge-popover {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+  visibility: visible;
+}
+
+.user-badge-head {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  padding-bottom: 12px;
+}
+
+.user-badge-meta {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.user-badge-display-name {
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.user-badge-role {
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  justify-self: start;
+  line-height: 1;
+  padding: 4px 10px;
+}
+
+.user-badge-role.is-admin {
+  background: var(--violet-soft);
+  color: var(--violet-dark);
+}
+
+.user-badge-role.is-owner {
+  background: var(--green-soft);
+  color: var(--green);
+}
+
+.user-badge-role.is-member {
+  background: var(--surface-soft);
+  color: var(--ink-soft);
+}
+
+.user-badge-links {
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 2px;
+  padding-top: 6px;
+}
+
+.user-badge-links a,
+.user-badge-links button {
+  align-items: center;
+  background: none;
+  border: 0;
+  border-radius: 8px;
+  color: var(--ink-soft);
+  display: flex;
+  font-size: 13px;
+  font-weight: 500;
+  gap: 9px;
+  padding: 8px 10px;
+  text-align: left;
+  text-decoration: none;
+  transition: background 140ms ease, color 140ms ease;
+  width: 100%;
+}
+
+.user-badge-links a:hover,
+.user-badge-links button:hover {
+  background: var(--surface-soft);
+  color: var(--ink);
+}
+
+.user-badge-logout {
+  align-items: center;
+  background: none;
+  border: none;
+  border-top: 1px solid var(--line);
+  border-radius: 0 0 8px 8px;
+  color: var(--red);
+  display: flex;
+  font-size: 13px;
+  font-weight: 600;
+  gap: 9px;
+  margin-top: 2px;
+  padding: 10px 10px 4px;
+  width: 100%;
+}
+
+.user-badge-logout:hover {
+  background: var(--red-soft);
+}
+
+.user-badge-dev-hint {
+  border-top: 1px solid var(--line);
+  color: var(--ink-muted);
+  font-size: 12px;
+  line-height: 1.5;
+  margin: 2px 0 0;
+  padding: 10px 2px 2px;
+}
+
+/* 窄屏只保留头像，浮层内查看姓名与角色 */
+@media (max-width: 720px) {
+  .user-badge-name {
+    display: none;
+  }
+
+  .user-badge-trigger {
+    padding: 3px;
+  }
+}
+
+/* 修改密码弹窗：复用 modal.css 的卡片体系，收窄到表单宽度 */
+.password-dialog {
+  width: min(420px, 100%);
+}
+
+.password-saved {
+  align-items: center;
+  color: var(--green);
+  display: flex;
+  font-size: 15px;
+  font-weight: 650;
+  gap: 8px;
+  justify-content: center;
+  margin: 8px 0;
+}

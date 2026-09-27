@@ -1,0 +1,28 @@
+[Unit]
+Description=Chat Knowledge Service (GraphRAG index + MCP search)
+Documentation=file:///opt/chat/deploy/README.md
+After=network-online.target docker.service chat-api.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=chatapp
+Group=chatapp
+WorkingDirectory=/opt/chat
+EnvironmentFile=/opt/chat/.env
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=NODE_ENV=production
+# 覆盖 .env 中通用的 OTEL_SERVICE_NAME；Knowledge 不建任何 GenAI callback
+Environment=OTEL_SERVICE_NAME=knowledge-service
+ExecStart=/usr/bin/node --import /opt/chat/packages/observability/dist/register.js /opt/chat/apps/knowledge-service/dist/main.js
+Restart=always
+RestartSec=5
+# service.close 后 flush 遥测（上限 5s），15s 留余量
+TimeoutStopSec=15
+StandardOutput=journal
+StandardError=journal
+NoNewPrivileges=yes
+LimitNOFILE=65535
+
+[Install]
+WantedBy=multi-user.target

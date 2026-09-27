@@ -1,0 +1,15 @@
+packages:
+  - "apps/*"
+allowBuilds:
+  '@swc/core': true
+  better-sqlite3: true
+  canvas: true
+  cbor-extract: true
+  electron-winstaller: true
+  esbuild: false
+  msgpackr-extract: true
+  protobufjs: true
+  tree-sitter: true
+  unrs-resolver: true
+patchedDependencies:
+  '@ai-sdk/workflow@2.0.28': patches/@ai-sdk__workflow@2.0.28.patch

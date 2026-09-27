@@ -1,0 +1,48 @@
+diff --git a/dist/index.js b/dist/index.js
+index 954fb3978027db8a55bd785b2725711ccb903b58..b10215c5cec47acd0124e42c52523ab6d0782d17 100644
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -2886,6 +2886,13 @@ function createOrphanFilter() {
+   }
+   return { shouldDrop };
+ }
++// 本地补丁：区分「调用方主动取消（stop/新建会话）」与真实网络错误。
++// abortSignal 已中止，或错误本身是 AbortError 时，属于预期取消，
++// 不应 console.error，也不应继续重连或抛 "No finish chunk received"。
++function isCallerAbort(error, signal) {
++  if (signal != null && signal.aborted) return true;
++  return error != null && (error.name === "AbortError" || error.code === "ABORT_ERR");
++}
+ var WorkflowChatTransport = class {
+   /**
+    * Creates a new WorkflowChatTransport instance.
+@@ -2987,6 +2994,9 @@ var WorkflowChatTransport = class {
+         }
+       }
+     } catch (error) {
++      if (isCallerAbort(error, abortSignal)) {
++        return;
++      }
+       console.error("Error in chat POST stream", error);
+     }
+     if (gotFinish) {
+@@ -3033,6 +3043,9 @@ var WorkflowChatTransport = class {
+     let replayFromStart = false;
+     const orphanFilter = useExplicitStartIndex && explicitStartIndex < 0 ? createOrphanFilter() : null;
+     while (!gotFinish) {
++      if (options.abortSignal != null && options.abortSignal.aborted) {
++        return;
++      }
+       const startIndex = useExplicitStartIndex ? explicitStartIndex : replayFromStart ? 0 : chunkIndex;
+       const url = `${baseUrl}?startIndex=${startIndex}`;
+       const response = await this.fetch(url, {
+@@ -3080,6 +3093,9 @@ var WorkflowChatTransport = class {
+         }
+         consecutiveErrors = 0;
+       } catch (error) {
++        if (isCallerAbort(error, options.abortSignal)) {
++          return;
++        }
+         console.error("Error in chat GET reconnectToStream", error);
+         consecutiveErrors++;
+         if (consecutiveErrors >= this.maxConsecutiveErrors) {

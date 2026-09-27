@@ -1,0 +1,21 @@
+[Unit]
+Description=Chat synthetic health probe (live/ready/auth, every 60s)
+Documentation=file:///opt/chat/docs/observability/runbooks/telemetry-pipeline.md
+After=network-online.target chat-api.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=chatapp
+Group=chatapp
+WorkingDirectory=/opt/chat
+EnvironmentFile=-/opt/chat/.env
+# 探针失败不重试：下次 timer 周期（60s）自然重跑
+ExecStart=/opt/chat/deploy/observability/synthetic/run-synthetic.sh
+TimeoutStartSec=30
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+StandardOutput=journal
+StandardError=journal

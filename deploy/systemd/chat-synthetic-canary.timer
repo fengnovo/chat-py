@@ -1,0 +1,13 @@
+[Unit]
+Description=Run chat synthetic canary probe every 15 minutes
+
+[Timer]
+# 与 60s 常规探针错峰：启动后 5 分钟首次，之后固定每 15 分钟
+OnBootSec=300s
+OnUnitActiveSec=900s
+AccuracySec=15s
+Persistent=false
+Unit=chat-synthetic-canary.service
+
+[Install]
+WantedBy=timers.target

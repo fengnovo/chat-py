@@ -1,0 +1,123 @@
+# 依赖与遥测管线告警（Task 10）
+#
+# PostgreSQL/Redis/Qdrant/S3 当前没有独立 client 指标，故障会先表现为：
+#   - API / Knowledge Service 5xx（见 chat-slo.yaml）
+#   - Worker run 失败、Outbox 派发失败、知识操作失败
+# 这些上游告警已在 SLO 组里覆盖；本文件负责观测后端（Alloy/Tempo/Loki/
+# Prometheus/Grafana）自身健康与导出失败。显式依赖指标是后续增强项，
+# 见 docs/observability/slo-and-alerts.md 的「已知缺口」。
+groups:
+  - name: chat-observability-pipeline
+    interval: 30s
+    rules:
+      - alert: AlloyCollectorDown
+        expr: up{job="alloy"} == 0
+        for: 3m
+        labels:
+          severity: urgent
+          team: platform
+          service: alloy
+        annotations:
+          summary: "Alloy 采集器不可达：所有遥测正在被应用端丢弃（业务不受影响）"
+          runbook_url: "https://github.com/fengnovo/chat/blob/main/docs/observability/runbooks/telemetry-pipeline.md"
+
+      - alert: TempoDown
+        expr: up{job="tempo"} == 0
+        for: 5m
+        labels:
+          severity: urgent
+          team: platform
+          service: tempo
+        annotations:
+          summary: "Tempo 不可达：trace 导出在 Alloy 排队/丢弃"
+          runbook_url: "https://github.com/fengnovo/chat/blob/main/docs/observability/runbooks/telemetry-pipeline.md"
+
+      - alert: LokiDown
+        expr: up{job="loki"} == 0
+        for: 5m
+        labels:
+          severity: ticket
+          team: platform
+          service: loki
+        annotations:
+          summary: "Loki 不可达：日志导出在 Alloy 排队/丢弃"
+          runbook_url: "https://github.com/fengnovo/chat/blob/main/docs/observability/runbooks/telemetry-pipeline.md"
+
+      - alert: PrometheusDown
+        expr: up{job="prometheus"} == 0
+        for: 3m
+        labels:
+          severity: page
+          team: platform
+          service: prometheus
+        annotations:
+          summary: "Prometheus 不可达：告警评估与指标写入中断"
+          runbook_url: "https://github.com/fengnovo/chat/blob/main/docs/observability/runbooks/telemetry-pipeline.md"
+
+      - alert: AlloyTraceExportFailures
+        expr: rate(otelcol_exporter_send_failed_spans_total[5m]) > 0
+        for: 10m
+        labels:
+          severity: ticket
+          team: platform
+          service: alloy
+        annotations:
+          summary: "Alloy trace 导出持续失败（10m）"
+          runbook_url: "https://github.com/fengnovo/chat/blob/main/docs/observability/runbooks/telemetry-pipeline.md"
+
+      - alert: AlloyMetricExportFailures
+        expr: rate(otelcol_exporter_send_failed_metric_points_total[5m]) > 0
+        for: 10m
+        labels:
+          severity: ticket
+          team: platform
+          service: alloy
+        annotations:
+          summary: "Alloy metric 导出持续失败（10m）"
+          runbook_url: "https://github.com/fengnovo/chat/blob/main/docs/observability/runbooks/telemetry-pipeline.md"
+
+      - alert: AlloyLogExportFailures
+        expr: rate(otelcol_exporter_send_failed_log_records_total[5m]) > 0
+        for: 10m
+        labels:
+          severity: ticket
+          team: platform
+          service: alloy
+        annotations:
+          summary: "Alloy log 导出持续失败（10m）"
+          runbook_url: "https://github.com/fengnovo/chat/blob/main/docs/observability/runbooks/telemetry-pipeline.md"
+
+      - alert: AlloyReceiverRefusing
+        expr: >-
+          rate(otelcol_receiver_refused_spans_total[5m]) > 0
+          or rate(otelcol_receiver_refused_metric_points_total[5m]) > 0
+        for: 10m
+        labels:
+          severity: urgent
+          team: platform
+          service: alloy
+        annotations:
+          summary: "Alloy 正在拒绝接收遥测（memory limiter 触顶或队列满）"
+          runbook_url: "https://github.com/fengnovo/chat/blob/main/docs/observability/runbooks/telemetry-pipeline.md"
+
+      - alert: ApplicationTelemetryExportFailures
+        expr: sum by (job, signal) (rate(telemetry_export_failures_total[10m])) > 0
+        for: 10m
+        labels:
+          severity: ticket
+          team: platform
+          service: observability-sdk
+        annotations:
+          summary: "{{ $labels.job }} 的 {{ $labels.signal }} 导出失败计数上涨"
+          runbook_url: "https://github.com/fengnovo/chat/blob/main/docs/observability/runbooks/telemetry-pipeline.md"
+
+      - alert: PrometheusRemoteWriteFailing
+        expr: rate(prometheus_remote_storage_samples_failed_total[5m]) > 0
+        for: 10m
+        labels:
+          severity: urgent
+          team: platform
+          service: prometheus
+        annotations:
+          summary: "Prometheus remote-write 接收失败（Alloy 指标无法落盘）"
+          runbook_url: "https://github.com/fengnovo/chat/blob/main/docs/observability/runbooks/telemetry-pipeline.md"

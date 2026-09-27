@@ -1,0 +1,462 @@
+.file-panel {
+  background: var(--sidebar);
+  border-left: 1px solid var(--line);
+  display: grid;
+  grid-template-rows: 48px minmax(0, 1fr);
+  min-height: 0;
+  min-width: 0;
+  position: relative;
+}
+
+/* 全屏模式：覆盖整个视口 */
+.file-panel.is-fullscreen {
+  border-left: 0;
+  height: 100vh;
+  left: 0;
+  position: fixed;
+  top: 0;
+  width: 100vw;
+  z-index: 200;
+}
+
+/* 文件面板左边缘的整列拖拽条 */
+.file-panel-resizer {
+  cursor: col-resize;
+  height: 100%;
+  left: -3px;
+  position: absolute;
+  top: 0;
+  touch-action: none;
+  width: 7px;
+  z-index: 5;
+}
+
+.file-panel-resizer::after {
+  background: transparent;
+  content: '';
+  inset: 0 2px;
+  position: absolute;
+  transition: background 140ms ease;
+}
+
+.file-panel-resizer:hover::after,
+.file-panel-resizer:active::after {
+  background: var(--violet);
+}
+
+.file-panel-head {
+  align-items: center;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  justify-content: space-between;
+  padding: 0 12px;
+}
+
+.file-panel-actions {
+  align-items: center;
+  display: flex;
+  gap: 2px;
+}
+
+.file-panel-actions .icon-button.is-active {
+  color: var(--accent, #7c3aed);
+}
+
+.file-panel-head .icon-button {
+  height: 36px;
+  position: relative;
+  width: 36px;
+}
+
+.file-panel-head .icon-button::after {
+  background: #1e1b26;
+  border-radius: 999px;
+  color: #fff;
+  content: attr(data-tooltip);
+  font-size: 12px;
+  font-weight: 500;
+  left: 50%;
+  opacity: 0;
+  padding: 5px 12px;
+  pointer-events: none;
+  position: absolute;
+  top: calc(100% + 8px);
+  transform: translateX(-50%) translateY(-4px);
+  transition: opacity 150ms ease, transform 150ms ease;
+  white-space: nowrap;
+  z-index: 200;
+}
+
+.file-panel-head .icon-button:hover::after {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+.file-panel-head .expand-toggle svg {
+  transition: transform 200ms ease;
+  transform: rotate(180deg);
+}
+
+.file-panel-head .expand-toggle.is-active svg {
+  transform: rotate(0deg);
+}
+
+.file-panel-title {
+  align-items: center;
+  color: var(--ink);
+  display: flex;
+  gap: 8px;
+}
+
+.file-panel-title strong {
+  font-size: 14px;
+}
+
+.file-panel-count {
+  background: var(--violet-soft);
+  border-radius: 999px;
+  color: var(--violet);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 1px 8px;
+}
+
+.file-panel-empty,
+.file-preview-empty {
+  align-items: center;
+  color: var(--ink-muted);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  justify-content: center;
+  padding: 24px;
+  text-align: center;
+}
+
+.file-panel-empty p,
+.file-preview-empty p {
+  color: var(--ink);
+  font-size: 14px;
+  margin: 0;
+}
+
+.file-panel-empty small,
+.file-preview-empty small {
+  font-size: 12px;
+}
+
+.file-panel-body {
+  display: grid;
+  grid-template-columns: 200px 8px minmax(0, 1fr);
+  min-height: 0;
+}
+
+/* 目录与预览区之间的拖拽条 */
+.file-tree-resizer {
+  cursor: col-resize;
+  height: 100%;
+  position: relative;
+  touch-action: none;
+  transition: background 150ms ease;
+  width: 12px;
+}
+
+.file-tree-resizer::before {
+  background: var(--line);
+  content: '';
+  height: 100%;
+  left: 5.5px;
+  position: absolute;
+  top: 0;
+  transition: background 150ms ease, left 150ms ease, width 150ms ease;
+  width: 1px;
+}
+
+/* hover 时显示更宽的高亮区域，提示可拖拽 */
+.file-tree-resizer::after {
+  background: transparent;
+  content: '';
+  height: 100%;
+  left: 0;
+  position: absolute;
+  top: 0;
+  transition: background 150ms ease;
+  width: 100%;
+}
+
+.file-tree-resizer:hover::after,
+body.is-file-resizing .file-tree-resizer::after {
+  background: rgb(109 74 255 / 8%);
+}
+
+.file-tree-resizer:hover::before,
+body.is-file-resizing .file-tree-resizer::before {
+  background: var(--violet);
+  left: 5px;
+  width: 2px;
+}
+
+.file-tree-pane {
+  border-right: 0;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 8px 0;
+}
+
+body.is-file-resizing {
+  cursor: col-resize;
+  user-select: none;
+}
+
+body.is-file-resizing * {
+  cursor: col-resize !important;
+}
+
+.file-tree,
+.file-tree ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.file-dir,
+.file-item {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: var(--ink);
+  cursor: pointer;
+  display: flex;
+  font-size: 13px;
+  gap: 6px;
+  padding: 5px 10px;
+  text-align: left;
+  width: 100%;
+}
+
+.file-dir:hover,
+.file-item:hover {
+  background: var(--surface-soft);
+}
+
+.file-dir svg:first-child {
+  transition: transform 160ms ease;
+}
+
+.file-dir[aria-expanded='true'] svg:first-child {
+  transform: rotate(90deg);
+}
+
+.file-item {
+  padding-left: 10px;
+}
+
+.file-item-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-op {
+  border-radius: 4px;
+  font-size: 10px;
+  padding: 1px 5px;
+}
+
+.file-op-write_file {
+  background: #e6f4ea;
+  color: #1e7e34;
+}
+
+.file-op-edit_file {
+  background: #fff4e5;
+  color: #b35c00;
+}
+
+.file-op-read_file {
+  background: #e8f0fe;
+  color: #1a56db;
+}
+
+.file-op-delete {
+  background: #fde8e8;
+  color: #c53030;
+}
+
+.file-item.is-selected {
+  background: var(--violet-soft);
+  color: var(--violet);
+}
+
+.file-preview-pane {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.file-preview {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.file-preview-head {
+  align-items: center;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 12px;
+}
+
+.file-preview-actions {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.file-view-switch {
+  background: var(--surface-soft);
+  border-radius: 6px;
+  display: flex;
+  padding: 2px;
+}
+
+.file-view-switch button {
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  color: var(--ink-muted);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 3px 10px;
+}
+
+.file-view-switch button.is-active {
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  color: var(--ink);
+}
+
+.file-download-btn {
+  align-items: center;
+  background: var(--violet-soft);
+  border: 0;
+  border-radius: 6px;
+  color: var(--violet-dark);
+  cursor: pointer;
+  display: inline-flex;
+  height: 26px;
+  justify-content: center;
+  width: 26px;
+}
+
+.file-download-btn:hover {
+  background: #e0d8ff;
+}
+
+.file-browser-frame {
+  background: #fff;
+  border: 0;
+  flex: 1;
+  height: 100%;
+  min-height: 0;
+  width: 100%;
+}
+
+.file-preview-path {
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-preview-lang {
+  background: var(--surface-soft);
+  border-radius: 4px;
+  color: var(--ink-muted);
+  font-size: 11px;
+  padding: 1px 6px;
+}
+
+.file-preview-code {
+  background: var(--surface-soft);
+  color: var(--ink);
+  flex: 1;
+  margin: 0;
+  min-height: 0;
+  overflow: auto;
+  padding: 12px;
+}
+
+.file-preview-code code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre;
+}
+
+/* 文件预览区 highlight.js 浅色主题 token 配色 */
+.file-preview-code.hljs {
+  color: #2a2733;
+}
+
+.file-preview-code .hljs-comment,
+.file-preview-code .hljs-quote {
+  color: #8a8598;
+  font-style: italic;
+}
+
+.file-preview-code .hljs-keyword,
+.file-preview-code .hljs-selector-tag,
+.file-preview-code .hljs-built_in,
+.file-preview-code .hljs-name,
+.file-preview-code .hljs-tag {
+  color: #7c3aed;
+}
+
+.file-preview-code .hljs-string,
+.file-preview-code .hljs-attr,
+.file-preview-code .hljs-template-tag,
+.file-preview-code .hljs-addition {
+  color: #158b62;
+}
+
+.file-preview-code .hljs-number,
+.file-preview-code .hljs-literal,
+.file-preview-code .hljs-variable,
+.file-preview-code .hljs-template-variable {
+  color: #c43b4d;
+}
+
+.file-preview-code .hljs-title,
+.file-preview-code .hljs-section,
+.file-preview-code .hljs-selector-id,
+.file-preview-code .hljs-selector-class {
+  color: #1a56db;
+}
+
+.file-preview-code .hljs-type,
+.file-preview-code .hljs-class .hljs-title,
+.file-preview-code .hljs-function .hljs-title {
+  color: #a86612;
+}
+
+.file-preview-code .hljs-attribute,
+.file-preview-code .hljs-meta,
+.file-preview-code .hljs-symbol,
+.file-preview-code .hljs-bullet,
+.file-preview-code .hljs-link {
+  color: #0e7490;
+}
+
+.file-preview-code .hljs-deletion,
+.file-preview-code .hljs-regexp {
+  color: #c43b4d;
+}
+
+.file-preview-code .hljs-strong {
+  font-weight: 600;
+}

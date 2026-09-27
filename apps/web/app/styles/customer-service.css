@@ -1,0 +1,669 @@
+/* 客服助手：复用 chat 主站设计令牌，保持风格一致 */
+.cs-page,
+.cs-widget {
+  display: flex;
+  flex-direction: column;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-sans);
+}
+
+.cs-page {
+  height: 100dvh;
+}
+
+.cs-widget {
+  height: 100%;
+  border-radius: 16px;
+  overflow: hidden;
+  background: var(--surface);
+}
+
+.cs-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 20px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+  flex-shrink: 0;
+}
+
+.cs-title {
+  font-size: 15px;
+  font-weight: 650;
+  color: var(--ink);
+  margin: 0;
+}
+
+.cs-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cs-header-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ink-soft);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 140ms ease, color 140ms ease;
+}
+
+.cs-header-close:hover {
+  background: var(--surface-soft);
+  color: var(--ink);
+}
+
+.cs-kb-select {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+
+.cs-kb-label {
+  flex-shrink: 0;
+}
+
+.cs-kb-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 140px;
+  max-width: 200px;
+  padding: 5px 9px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.cs-kb-trigger:hover {
+  border-color: var(--line-strong);
+}
+
+.cs-kb-trigger:focus-visible {
+  outline: none;
+  border-color: var(--violet);
+  box-shadow: 0 0 0 3px rgb(109 74 255 / 12%);
+}
+
+.cs-kb-current {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cs-kb-chevron {
+  display: inline-flex;
+  color: var(--ink-soft);
+  transition: transform 160ms ease;
+}
+
+.cs-kb-chevron.is-open {
+  transform: rotate(90deg);
+}
+
+/* 复用主页头像下拉的 popover 风格 */
+.cs-kb-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 50;
+  min-width: 180px;
+  max-width: 260px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: var(--shadow-md);
+  padding: 8px;
+  display: grid;
+  gap: 2px;
+  animation: cs-kb-popover-in 140ms ease;
+}
+
+@keyframes cs-kb-popover-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.cs-kb-popover button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 8px;
+  background: none;
+  color: var(--ink-soft);
+  font-size: 13px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  transition: background 140ms ease, color 140ms ease;
+}
+
+.cs-kb-popover button:hover {
+  background: var(--surface-soft);
+  color: var(--ink);
+}
+
+.cs-kb-popover button.is-selected {
+  color: var(--ink);
+}
+
+.cs-kb-check {
+  display: inline-flex;
+  width: 16px;
+  flex-shrink: 0;
+  color: var(--violet);
+}
+
+.cs-kb-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cs-kb-empty {
+  padding: 10px;
+  color: var(--ink-muted);
+  font-size: 13px;
+  text-align: center;
+}
+
+.cs-chat {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.cs-message {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+}
+
+.cs-message-user {
+  flex-direction: row-reverse;
+}
+
+.cs-message-assistant {
+  justify-content: flex-start;
+}
+
+.cs-message-avatar {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-soft);
+  border: 1px solid var(--line);
+  flex-shrink: 0;
+  font-size: 15px;
+}
+
+.cs-message-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  box-shadow: var(--shadow-sm);
+  min-width: 0;
+}
+
+/* 助手消息占满聊天区宽度，避免思考过程/结果宽度跳动 */
+.cs-message-assistant .cs-message-body {
+  flex: 1 1 auto;
+  width: 100%;
+  /* markdown 渲染自带段落排版，关闭 pre-wrap 避免多余空行 */
+  white-space: normal;
+}
+
+/* 助手 markdown 正文字号与主站保持一致 */
+.cs-message-assistant .cs-message-markdown {
+  font-size: 14px;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+
+.cs-message-user .cs-message-body {
+  flex: 0 1 auto;
+  max-width: 80%;
+}
+
+.cs-message-user .cs-message-body {
+  background: var(--violet);
+  color: #fff;
+}
+
+.cs-message-assistant .cs-message-body {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: var(--ink);
+}
+
+.cs-message-text {
+  font-size: 14px;
+}
+
+.cs-message-error {
+  font-size: 12px;
+  color: var(--red);
+  background: var(--red-soft);
+  padding: 8px 10px;
+  border-radius: 8px;
+}
+
+.cs-cursor {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  background: currentColor;
+  margin-left: 2px;
+  animation: cs-blink 1s step-end infinite;
+  vertical-align: text-bottom;
+}
+
+@keyframes cs-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+/* Thinking card */
+.cs-thinking-card {
+  background: var(--surface-soft);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 12px;
+}
+
+.cs-thinking-title {
+  font-weight: 650;
+  color: var(--ink-soft);
+  margin-bottom: 6px;
+}
+
+.cs-thinking-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.cs-thinking-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.cs-thinking-item-running {
+  color: var(--violet);
+}
+
+.cs-thinking-item-completed {
+  color: var(--ink-soft);
+}
+
+.cs-thinking-item-error {
+  color: var(--red);
+}
+
+.cs-step-icon {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 10px;
+}
+
+.cs-step-icon-running {
+  color: var(--violet);
+}
+
+.cs-step-icon-done {
+  color: var(--green);
+}
+
+.cs-step-icon-error {
+  color: var(--red);
+}
+
+.cs-thinking-content {
+  flex: 1;
+}
+
+.cs-thinking-step-title {
+  font-weight: 500;
+}
+
+.cs-thinking-detail {
+  color: var(--ink-soft);
+  font-size: 11px;
+  margin-top: 2px;
+}
+
+/* Citations */
+.cs-citations {
+  border-top: 1px dashed var(--line);
+  padding-top: 8px;
+}
+
+.cs-citations-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--ink-soft);
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+  text-align: left;
+}
+
+.cs-citations-header:hover {
+  color: var(--ink);
+}
+
+.cs-citations-chevron {
+  display: inline-flex;
+  color: var(--ink-muted);
+  transition: transform 160ms ease;
+}
+
+.cs-citations-header.is-open .cs-citations-chevron {
+  transform: rotate(90deg);
+}
+
+.cs-citations-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.cs-citations-images-badge {
+  background: var(--violet-soft);
+  color: var(--violet-dark);
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+/* 每条来源一行：来源 pill +（可选）关联图片缩略图 */
+.cs-citation-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.cs-citation-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.cs-citation-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  background: var(--violet-soft);
+  color: var(--violet-dark);
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+}
+
+/* 关联图片缩略图：点击弹出大图，与正文 markdown 图片共用同一个 lightbox */
+.cs-citation-images {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.cs-citation-image {
+  width: 56px;
+  height: 56px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-soft);
+  overflow: hidden;
+  cursor: zoom-in;
+  transition: border-color 140ms ease, transform 140ms ease;
+}
+
+.cs-citation-image:hover {
+  border-color: var(--violet);
+  transform: translateY(-1px);
+}
+
+.cs-citation-image:focus-visible {
+  outline: none;
+  border-color: var(--violet);
+  box-shadow: 0 0 0 3px rgb(109 74 255 / 14%);
+}
+
+.cs-citation-image img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.cs-citation-index {
+  font-weight: 600;
+}
+
+.cs-citation-doc {
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cs-citation-heading {
+  opacity: 0.8;
+}
+
+.cs-citation-via {
+  font-size: 9px;
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: rgb(109 74 255 / 12%);
+  text-transform: uppercase;
+}
+
+/* Input area */
+.cs-input-area {
+  padding: 12px 16px 16px;
+  background: var(--surface);
+  border-top: 1px solid var(--line);
+  flex-shrink: 0;
+}
+
+/* 直接照抄 chat 主页 composer 的输入框样式 */
+.cs-input-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: white;
+  border: 1px solid var(--line-strong);
+  border-radius: 14px;
+  box-shadow: 0 5px 18px rgb(30 25 43 / 7%);
+  padding: 8px 10px 8px 12px;
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.cs-input-wrapper:focus-within {
+  border-color: #a89af1;
+  box-shadow: 0 0 0 3px rgb(109 74 255 / 9%),
+    0 6px 20px rgb(30 25 43 / 8%);
+}
+
+.cs-input {
+  background: transparent;
+  border: 0;
+  line-height: 1.5;
+  max-height: 160px;
+  min-height: 44px;
+  outline: 0;
+  padding: 4px 2px 0;
+  resize: none;
+  width: 100%;
+  font-size: 14px;
+  color: var(--ink);
+}
+
+.cs-input::placeholder {
+  color: #aaa6b0;
+}
+
+.cs-input:disabled {
+  opacity: 0.55;
+}
+
+/* 去掉全局 focus-visible 的紫色外圈，只保留 wrapper 的聚焦样式 */
+.cs-input:focus-visible {
+  outline: none;
+}
+
+/* 发送按钮与 chat 主页 .send-button 保持一致 */
+.cs-send-btn {
+  align-items: center;
+  align-self: flex-end;
+  background: var(--violet);
+  border: 0;
+  border-radius: 9px;
+  color: white;
+  cursor: pointer;
+  display: flex;
+  flex: 0 0 auto;
+  height: 34px;
+  justify-content: center;
+  transition: background 160ms ease, opacity 160ms ease;
+  width: 34px;
+}
+
+.cs-send-btn:hover:not(:disabled) {
+  background: var(--violet-dark);
+}
+
+.cs-send-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.34;
+}
+
+.cs-send-btn:focus-visible {
+  outline: none;
+}
+
+/* 停止按钮与 chat 主页 .send-button.is-stop 保持一致 */
+.cs-send-btn.is-stop {
+  background: #44404d;
+  border-radius: 999px;
+}
+
+.cs-footer-note {
+  text-align: center;
+  font-size: 11px;
+  color: var(--ink-muted);
+  margin-top: 8px;
+}
+
+.cs-global-error {
+  margin: 0 16px;
+  padding: 8px 12px;
+  background: var(--red-soft);
+  color: var(--red);
+  border-radius: 8px;
+  font-size: 12px;
+}
+
+/* 悬浮窗内的紧凑适配 */
+.cs-widget .cs-header {
+  padding: 10px 14px;
+}
+
+.cs-widget .cs-chat {
+  padding: 12px;
+  gap: 12px;
+}
+
+.cs-widget .cs-message {
+  max-width: 95%;
+}
+
+.cs-widget .cs-message-body {
+  padding: 10px 12px;
+  border-radius: 12px;
+}
+
+.cs-widget .cs-input-area {
+  padding: 10px 12px 12px;
+}
+
+@media (max-width: 640px) {
+  .cs-header {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 10px 14px;
+  }
+
+  .cs-chat {
+    padding: 14px;
+  }
+
+  .cs-message {
+    max-width: 100%;
+  }
+
+  .cs-input-area {
+    padding: 10px 14px 14px;
+  }
+}

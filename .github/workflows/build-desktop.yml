@@ -1,0 +1,134 @@
+name: build-desktop
+
+on:
+  push:
+    tags:
+      - 'desktop-v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: '发布标签（如 desktop-v0.1.0），留空则仅构建不发布'
+        required: false
+        type: string
+
+concurrency:
+  group: desktop-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  ELECTRON_WEB_URL: https://chat.keen-tech.top
+  NODE_VERSION: '22'
+  PNPM_VERSION: '11.24.0'
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14
+            platform: mac
+            artifact_glob: |
+              apps/desktop/release/*.dmg
+              apps/desktop/release/*.zip
+          - os: windows-latest
+            platform: win
+            artifact_glob: |
+              apps/desktop/release/*.exe
+              apps/desktop/release/*.zip
+
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build TypeScript
+        run: pnpm --filter @repo/desktop build
+
+      - name: Build Electron (macOS)
+        if: matrix.platform == 'mac'
+        working-directory: apps/desktop
+        run: npx electron-builder --config electron-builder.config.mjs --mac --publish=never
+        env:
+          ELECTRON_WEB_URL: ${{ env.ELECTRON_WEB_URL }}
+
+      - name: Build Electron (Windows)
+        if: matrix.platform == 'win'
+        working-directory: apps/desktop
+        run: npx electron-builder --config electron-builder.config.mjs --win --publish=never
+        env:
+          ELECTRON_WEB_URL: ${{ env.ELECTRON_WEB_URL }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-${{ matrix.platform }}
+          path: ${{ matrix.artifact_glob }}
+          if-no-files-found: error
+          retention-days: 30
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/desktop-v') || inputs.tag != ''
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download macOS artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: desktop-mac
+          path: artifacts/mac
+
+      - name: Download Windows artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: desktop-win
+          path: artifacts/win
+
+      - name: Determine release tag
+        id: tag
+        run: |
+          TAG="${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || inputs.tag }}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.tag }}
+          name: Keen AI Desktop ${{ steps.tag.outputs.tag }}
+          draft: false
+          prerelease: false
+          files: |
+            artifacts/mac/*
+            artifacts/win/*
+          body: |
+            ## Keen AI Desktop Client
+
+            连接至 ${{ env.ELECTRON_WEB_URL }}
+
+            > 当前 macOS 包未签名。首次打开请在 Finder 中右键应用，选择“打开”并确认；如果 macOS 仍提示应用已损坏，请执行：`xattr -dr com.apple.quarantine "Keen AI.app"`。
+
+            ### 下载
+
+            | 平台 | 文件 |
+            | --- | --- |
+            | macOS | `.dmg` 安装包 / `.zip` 便携版 |
+            | Windows | `.exe` 安装包 / `.zip` 便携版 |

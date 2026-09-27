@@ -1,0 +1,693 @@
+.agent-interrupt {
+  background: #faf9ff;
+  border: 1px solid #ded8fa;
+  border-radius: 12px;
+  margin: 2px 0 26px 47px;
+  padding: 16px;
+}
+
+.agent-panel-head {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+}
+
+.agent-panel-head > strong {
+  color: var(--ink-muted);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.agent-interrupt ul {
+  display: grid;
+  gap: 8px;
+  list-style: none;
+  margin: 13px 0 0;
+  padding: 0;
+}
+
+/* 任务计划：输入框上方的紧凑状态条 */
+.task-bar {
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  margin: 0 auto 8px;
+  max-width: 1180px;
+  overflow: hidden;
+}
+
+.task-bar-head {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: var(--ink);
+  display: flex;
+  font-size: 13px;
+  font-weight: 600;
+  gap: 8px;
+  padding: 9px 12px;
+  text-align: left;
+  width: 100%;
+}
+
+.task-bar-head:hover {
+  background: #faf9ff;
+}
+
+.task-bar-head > svg:first-child {
+  color: var(--violet);
+  flex: 0 0 auto;
+}
+
+.task-bar-head > svg:last-child {
+  color: var(--ink-muted);
+  flex: 0 0 auto;
+  margin-left: auto;
+  transition: transform 160ms ease;
+}
+
+.task-bar-head[aria-expanded='true'] > svg:last-child {
+  transform: rotate(90deg);
+}
+
+.task-bar-count {
+  flex: 0 0 auto;
+}
+
+.task-bar-current {
+  color: var(--ink-muted);
+  flex: 1 1 auto;
+  font-weight: 400;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.task-bar-list {
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 7px;
+  list-style: none;
+  margin: 0;
+  max-height: 220px;
+  overflow-y: auto;
+  padding: 10px 12px;
+}
+
+.task-bar-list li {
+  align-items: center;
+  color: var(--ink-soft);
+  display: grid;
+  font-size: 13px;
+  gap: 9px;
+  grid-template-columns: 22px minmax(0, 1fr);
+  line-height: 1.45;
+}
+
+.task-bar-list li > span {
+  align-items: center;
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--ink-muted);
+  display: flex;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  height: 22px;
+  justify-content: center;
+  width: 22px;
+}
+
+.task-bar-list li.is-completed {
+  color: var(--ink-muted);
+  text-decoration: line-through;
+}
+
+.task-bar-list li.is-completed > span {
+  background: var(--green-soft);
+  border-color: #b7dfd0;
+  color: var(--green);
+}
+
+.task-bar-list li.is-in_progress {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+/* 过程区：默认折叠，展开后固定 200px 高度、内部滚动。
+   嵌入在 assistant 消息体内，与正文同列、顶边与头像对齐。 */
+.agent-process {
+  background: #fbfaf7;
+  border: 1px solid #e7e2d6;
+  border-radius: 12px;
+  margin: 0 0 14px;
+  /* 宽度始终撑满消息正文列，不随最新日志文案长短变化 */
+  overflow: hidden;
+  width: 100%;
+}
+
+.agent-process-head {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: var(--ink);
+  display: flex;
+  font-size: 13px;
+  font-weight: 600;
+  gap: 8px;
+  padding: 12px 14px;
+  text-align: left;
+  width: 100%;
+}
+
+.agent-process-head:hover {
+  background: #f6f4ee;
+}
+
+.agent-process-title {
+  flex: 0 0 auto;
+}
+
+/* 标题栏中间：实时显示最新一条日志，只占一行，超长省略；
+   宽度自由伸缩，把「本轮时间 / 收起」始终顶在最右边不动 */
+.agent-process-live,
+.agent-process-spacer {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.agent-process-live {
+  color: var(--ink-muted);
+  font-weight: 400;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-process-time {
+  color: var(--ink-muted);
+  flex: 0 0 auto;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.agent-process-toggle {
+  align-items: center;
+  color: var(--ink-muted);
+  display: flex;
+  flex: 0 0 auto;
+  font-size: 12px;
+  font-weight: 500;
+  gap: 3px;
+}
+
+.agent-process-head[aria-expanded='true'] .agent-process-toggle svg {
+  transform: rotate(90deg);
+}
+
+.agent-process-toggle svg {
+  transition: transform 160ms ease;
+}
+
+.agent-process-body {
+  border-top: 1px solid #e7e2d6;
+  display: grid;
+  gap: 6px;
+  overflow-y: auto;
+  padding: 10px 14px;
+}
+
+/* 过程旁白：模型在工具轮次里的说明文字 */
+.process-narration {
+  color: var(--ink-soft);
+  font-size: 13px;
+  line-height: 1.5;
+  margin: 0;
+  word-break: break-word;
+}
+
+/* 工具调用行 */
+.process-tool {
+  display: grid;
+  gap: 4px;
+}
+
+.process-tool-head {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: var(--ink-soft);
+  display: flex;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  gap: 7px;
+  padding: 2px 0;
+  text-align: left;
+  width: 100%;
+}
+
+.process-tool-head:disabled {
+  cursor: default;
+}
+
+.process-tool-head > svg:first-child {
+  color: var(--ink-muted);
+  flex: 0 0 auto;
+}
+
+.process-tool.is-end .process-tool-head > svg:first-child {
+  color: var(--green);
+}
+
+.process-tool-name {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.process-tool-state {
+  color: var(--ink-muted);
+}
+
+.process-tool-head > svg:last-child {
+  margin-left: auto;
+  transition: transform 160ms ease;
+}
+
+.process-tool-head[aria-expanded='true'] > svg:last-child {
+  transform: rotate(90deg);
+}
+
+.process-tool-detail {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.process-tool-cmd {
+  background: #f3efe6;
+  border-radius: 6px;
+  color: var(--ink);
+  display: block;
+  font-size: 12px;
+  overflow-x: auto;
+  padding: 5px 8px;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.process-tool-output {
+  background: #f7f5f0;
+  border-left: 2px solid #ded8c8;
+  border-radius: 0 6px 6px 0;
+  color: var(--ink-soft);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.5;
+  margin: 0;
+  max-height: 200px;
+  overflow: auto;
+  padding: 6px 8px;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.agent-interrupt {
+  background: var(--amber-soft);
+  border-color: #efd29d;
+  padding: 22px;
+}
+
+.agent-interrupt .eyebrow {
+  color: var(--amber);
+}
+
+.agent-interrupt h3 {
+  font-size: 18px;
+  line-height: 1.5;
+  margin: 10px 0 0;
+}
+
+.agent-interrupt .agent-panel-head h3 {
+  margin: 0;
+}
+
+.agent-interrupt ul li {
+  align-items: baseline;
+  background: rgb(255 255 255 / 72%);
+  border: 1px solid rgb(220 178 105 / 42%);
+  border-radius: 8px;
+  display: grid;
+  font-size: 15px;
+  gap: 14px;
+  grid-template-columns: minmax(90px, auto) 1fr;
+  line-height: 1.55;
+  padding: 13px 14px;
+}
+
+.agent-interrupt li code {
+  color: #89540e;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.question-options {
+  display: grid;
+  gap: 7px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 13px;
+}
+
+.question-options button {
+  background: rgb(255 255 255 / 72%);
+  border: 1px solid rgb(220 178 105 / 50%);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  min-height: 50px;
+  padding: 9px 10px;
+  text-align: left;
+}
+
+.question-options button.is-selected {
+  background: white;
+  border-color: var(--violet);
+  box-shadow: 0 0 0 2px rgb(109 74 255 / 10%);
+}
+
+.question-options strong {
+  font-size: 11px;
+}
+
+.question-options small {
+  color: var(--ink-muted);
+  font-size: 9px;
+  line-height: 1.4;
+  margin-top: 3px;
+}
+
+.custom-answer {
+  background: white;
+  border: 1px solid rgb(220 178 105 / 55%);
+  border-radius: 8px;
+  font-size: 11px;
+  margin-top: 9px;
+  min-height: 39px;
+  padding: 0 11px;
+  width: 100%;
+}
+
+.interaction-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 13px;
+  flex-wrap: wrap;
+}
+
+.interaction-actions button {
+  border-radius: 9px;
+  font-size: 14px;
+  font-weight: 700;
+  min-height: 44px;
+  padding: 0 17px;
+}
+
+.primary-action {
+  background: var(--violet);
+  border: 1px solid var(--violet);
+  color: white;
+}
+
+.secondary-action {
+  background: white;
+  border: 1px solid #dbbf90;
+  color: #7a4d10;
+}
+
+.session-action {
+  background: #f2edff;
+  border: 1px solid #9b86ff;
+  color: #5334d9;
+}
+
+.session-action:hover:not(:disabled) {
+  background: #e8e0ff;
+}
+
+.interaction-actions button:disabled {
+  opacity: 0.48;
+}
+
+.interaction-error {
+  color: var(--red);
+  font-size: 10px;
+  margin: 10px 0 0;
+}
+
+/* 子 Agent 卡片：执行面板标题栏下方常驻，运行中也能直接看到进度 */
+.subagent-cards {
+  border-top: 1px solid #e7e2d6;
+  display: grid;
+  gap: 6px;
+  padding: 10px 14px;
+}
+
+.subagent-card {
+  animation: subagent-card-in 200ms ease-out;
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  display: grid;
+  overflow: hidden;
+}
+
+.subagent-card-head {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: var(--ink-soft);
+  display: flex;
+  font-size: 12px;
+  gap: 7px;
+  padding: 7px 9px;
+  text-align: left;
+  width: 100%;
+}
+
+.subagent-card-head:disabled {
+  cursor: default;
+}
+
+.subagent-card-head > svg:first-child,
+.subagent-card-head > .activity-spinner {
+  flex: 0 0 auto;
+}
+
+.subagent-card-head > svg:first-child {
+  color: var(--ink-muted);
+}
+
+.subagent-card.is-completed .subagent-card-head > svg:first-child {
+  color: var(--green);
+}
+
+.subagent-card.is-failed .subagent-card-head > svg:first-child,
+.subagent-card.is-timeout .subagent-card-head > svg:first-child {
+  color: var(--red);
+}
+
+.subagent-card-role {
+  color: var(--ink);
+  flex: 1 1 auto;
+  font-weight: 600;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.subagent-card-state {
+  color: var(--ink-muted);
+  flex: 0 0 auto;
+}
+
+.subagent-card-meta {
+  color: var(--ink-muted);
+  flex: 0 0 auto;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.subagent-card-head > svg:last-child {
+  color: var(--ink-muted);
+  flex: 0 0 auto;
+  margin-left: auto;
+  transition: transform 160ms ease;
+}
+
+.subagent-card-head[aria-expanded='true'] > svg:last-child {
+  transform: rotate(90deg);
+}
+
+.subagent-card-body {
+  border-top: 1px solid var(--line);
+  padding: 8px 9px;
+}
+
+.subagent-card-summary {
+  color: var(--ink-soft);
+  display: -webkit-box;
+  font-size: 13px;
+  line-height: 1.55;
+  margin: 0;
+  overflow: hidden;
+  white-space: pre-wrap;
+  word-break: break-word;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 5;
+}
+
+.subagent-card-attempt {
+  background: var(--amber-soft);
+  border-radius: 5px;
+  color: var(--amber);
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 1px 6px;
+  white-space: nowrap;
+}
+
+.subagent-card-bg {
+  background: color-mix(in srgb, var(--violet, #6d5aff) 12%, white);
+  border-radius: 5px;
+  color: var(--violet, #6d5aff);
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 1px 6px;
+  white-space: nowrap;
+}
+
+.subagent-card.is-review-exhausted {
+  border-color: var(--amber);
+}
+
+.subagent-review {
+  border-radius: 7px;
+  font-size: 12px;
+  margin-bottom: 8px;
+  padding: 7px 9px;
+}
+
+.subagent-review.is-passed {
+  background: color-mix(in srgb, var(--green) 7%, white);
+}
+
+.subagent-review.is-failed {
+  background: var(--amber-soft);
+}
+
+.subagent-review-head {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+  margin: 0 0 5px;
+}
+
+.subagent-review-round {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.subagent-review-badge {
+  border-radius: 5px;
+  font-weight: 600;
+  padding: 1px 6px;
+}
+
+.subagent-review-badge.is-passed {
+  background: color-mix(in srgb, var(--green) 14%, white);
+  color: var(--green);
+}
+
+.subagent-review-badge.is-failed {
+  background: white;
+  color: var(--amber);
+}
+
+.subagent-review-list {
+  display: grid;
+  gap: 3px;
+  list-style: none;
+  margin: 0 0 5px;
+  padding: 0;
+}
+
+.subagent-review-list li {
+  align-items: flex-start;
+  display: flex;
+  gap: 5px;
+  line-height: 1.5;
+}
+
+.subagent-review-list li svg {
+  flex: 0 0 auto;
+  margin-top: 3px;
+}
+
+.subagent-review-list li.is-met {
+  color: var(--ink-muted);
+}
+
+.subagent-review-list li.is-met svg {
+  color: var(--green);
+}
+
+.subagent-review-list li.is-missed {
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.subagent-review-list li.is-missed svg {
+  color: var(--red);
+}
+
+.subagent-review-feedback {
+  color: var(--ink-soft);
+  line-height: 1.5;
+  margin: 4px 0 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.subagent-review + .subagent-card-summary {
+  border-top: 1px dashed var(--line);
+  margin-top: 4px;
+  padding-top: 8px;
+}
+
+@keyframes subagent-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .subagent-card {
+    animation: none !important;
+  }
+}

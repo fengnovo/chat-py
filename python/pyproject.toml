@@ -1,0 +1,46 @@
+[project]
+name = "chat-py"
+version = "0.1.0"
+description = "Keen AI — Python rewrite of Node coding agent platform"
+requires-python = ">=3.13"
+
+[tool.uv.workspace]
+members = [
+    "packages/contracts",
+    "packages/db",
+    "packages/artifacts",
+    "packages/observability",
+    "packages/memory-core",
+    "packages/agent-core",
+    "packages/knowledge-graphrag",
+    "apps/api",
+    "apps/worker",
+    "apps/knowledge-service",
+]
+
+[tool.uv.sources]
+contracts = { workspace = true }
+db = { workspace = true }
+artifacts = { workspace = true }
+observability = { workspace = true }
+memory-core = { workspace = true }
+agent-core = { workspace = true }
+knowledge-graphrag = { workspace = true }
+
+# 国内拉取 PyPI 走阿里云镜像；官方源不可达时自动回退
+[[tool.uv.index]]
+name = "aliyun"
+url = "https://mirrors.aliyun.com/pypi/simple/"
+default = true
+
+[[tool.uv.index]]
+name = "pypi"
+url = "https://pypi.org/simple"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.26",
+    "ruff>=0.9",
+    "mypy>=1.15",
+]

@@ -1,0 +1,562 @@
+.composer-wrap {
+  background: var(--surface);
+  /* 左右内边距与 .message-list 对齐，过程区与任务列表的左右边界才会重合。 */
+  padding: 0 18px 10px;
+}
+
+.composer-activity {
+  align-items: center;
+  color: var(--ink-muted);
+  display: flex;
+  font-size: 13px;
+  font-weight: 600;
+  gap: 8px;
+  margin: 0 auto 6px;
+  max-width: 1180px;
+  min-height: 20px;
+}
+
+.activity-spinner {
+  animation: activity-spin 850ms linear infinite;
+  border: 2px solid #ded8fa;
+  border-radius: 999px;
+  border-top-color: var(--violet);
+  display: inline-block;
+  flex: 0 0 auto;
+  height: 15px;
+  width: 15px;
+}
+
+@keyframes activity-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.tokens-dot {
+  background: var(--violet);
+  border-radius: 999px;
+  display: inline-block;
+  height: 6px;
+  width: 6px;
+}
+
+.composer {
+  background: white;
+  border: 1px solid var(--line-strong);
+  border-radius: 14px;
+  box-shadow: 0 5px 18px rgb(30 25 43 / 7%);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0 auto;
+  max-width: 1180px;
+  padding: 8px 10px 8px 12px;
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.composer:focus-within {
+  border-color: #a89af1;
+  box-shadow: 0 0 0 3px rgb(109 74 255 / 9%),
+    0 6px 20px rgb(30 25 43 / 8%);
+}
+
+.composer textarea {
+  background: transparent;
+  border: 0;
+  line-height: 1.5;
+  max-height: 160px;
+  min-height: 44px;
+  outline: 0;
+  padding: 4px 2px 0;
+  resize: none;
+  width: 100%;
+}
+
+.composer textarea::placeholder {
+  color: #aaa6b0;
+}
+
+.composer textarea:disabled {
+  opacity: 0.55;
+}
+
+.composer-toolbar {
+  align-items: center;
+  display: flex;
+  gap: 6px;
+}
+
+.composer-icon-button {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  color: var(--ink-muted);
+  display: inline-flex;
+  flex: 0 0 auto;
+  height: 32px;
+  justify-content: center;
+  position: relative;
+  transition: background 140ms ease, color 140ms ease;
+  width: 32px;
+}
+
+.composer-icon-button:hover:not(:disabled) {
+  background: var(--violet-soft);
+  color: var(--violet-dark);
+}
+
+.composer-icon-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.composer-error {
+  color: var(--red);
+  font-size: 12px;
+  font-weight: 600;
+  margin: 0;
+  padding: 0 2px;
+}
+
+/* 待发送附件（两阶段预览：发送前可删，发送后进入消息气泡） */
+.composer-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-top: 2px;
+}
+
+.composer-attachment {
+  align-items: flex-start;
+  background: var(--surface-soft);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  display: inline-flex;
+  max-width: 200px;
+  padding: 5px 22px 5px 5px;
+  position: relative;
+}
+
+.composer-attachment.is-error {
+  border-color: var(--red);
+}
+
+/* 图片卡片：四边留白对称，缩略图水平竖直居中，关闭按钮盖在图片右上角 */
+.composer-attachment:has(.composer-attachment-thumb-button) {
+  align-items: center;
+  justify-content: center;
+  padding: 5px;
+}
+
+.composer-attachment:has(.composer-attachment-thumb-button) .composer-attachment-remove {
+  right: 4px;
+  top: 4px;
+}
+
+.composer-attachment-thumb-button {
+  background: none;
+  border: 0;
+  border-radius: 7px;
+  cursor: zoom-in;
+  line-height: 0;
+  padding: 0;
+}
+
+.composer-attachment-thumb {
+  border-radius: 7px;
+  height: 48px;
+  object-fit: cover;
+  width: 48px;
+}
+
+.composer-attachment-file {
+  align-items: center;
+  color: var(--ink-soft);
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 500;
+  gap: 6px;
+  max-width: 168px;
+  padding: 4px 2px;
+}
+
+.composer-attachment-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.composer-attachment-size {
+  color: var(--ink-faint, #9d97a8);
+  flex: none;
+  font-size: 11px;
+}
+
+/* 上传中/失败遮罩：盖在缩略图或文件条中间 */
+.composer-attachment-overlay {
+  align-items: center;
+  background: rgb(30 25 43 / 42%);
+  border-radius: 7px;
+  bottom: 5px;
+  display: flex;
+  justify-content: center;
+  left: 5px;
+  position: absolute;
+  top: 5px;
+  width: 48px;
+}
+
+.composer-attachment-file ~ .composer-attachment-overlay {
+  width: auto;
+  right: 22px;
+}
+
+.composer-attachment-overlay.is-error {
+  background: rgb(30 25 43 / 68%);
+}
+
+.composer-attachment-retry {
+  align-items: center;
+  background: none;
+  border: 0;
+  color: white;
+  cursor: pointer;
+  display: inline-flex;
+  flex-direction: column;
+  font-size: 10px;
+  gap: 2px;
+  line-height: 1.2;
+  padding: 0;
+}
+
+.composer-attachment-retry:hover {
+  color: #cfc6ff;
+}
+
+.composer-attachment-remove {
+  align-items: center;
+  background: rgb(30 25 43 / 55%);
+  border: 0;
+  border-radius: 999px;
+  color: white;
+  display: flex;
+  height: 17px;
+  justify-content: center;
+  position: absolute;
+  right: 3px;
+  top: 3px;
+  width: 17px;
+}
+
+.composer-attachment-remove:hover {
+  background: var(--red);
+}
+
+/* 哈希校验 / 上传进度：盖在缩略图或文件条上，底部细进度条 */
+.composer-attachment-progress {
+  align-items: center;
+  background: rgb(30 25 43 / 45%);
+  border-radius: 7px;
+  bottom: 5px;
+  display: flex;
+  justify-content: center;
+  left: 5px;
+  position: absolute;
+  top: 5px;
+  width: 48px;
+}
+
+.composer-attachment-file ~ .composer-attachment-progress {
+  right: 22px;
+  width: auto;
+}
+
+.composer-attachment-progress::after {
+  background: rgb(255 255 255 / 22%);
+  border-radius: 999px;
+  bottom: 4px;
+  content: '';
+  height: 3px;
+  left: 6px;
+  position: absolute;
+  right: 6px;
+}
+
+.composer-attachment-progress-bar {
+  background: #b5a8ff;
+  border-radius: 999px;
+  bottom: 4px;
+  height: 3px;
+  left: 6px;
+  max-width: calc(100% - 12px);
+  position: absolute;
+  transition: width 120ms ease-out;
+  z-index: 1;
+}
+
+.composer-attachment-progress-text {
+  color: #fff;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.1;
+  text-align: center;
+  text-shadow: 0 1px 2px rgb(0 0 0 / 60%);
+}
+
+/* 秒传 / 本地预览徽章 */
+.composer-attachment-badges {
+  display: inline-flex;
+  gap: 3px;
+  left: 5px;
+  position: absolute;
+  top: 5px;
+  z-index: 2;
+}
+
+.composer-badge {
+  align-items: center;
+  background: rgb(30 25 43 / 78%);
+  border: 0;
+  border-radius: 5px;
+  color: #fff;
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 1;
+  padding: 2px 4px;
+}
+
+button.composer-badge {
+  cursor: pointer;
+  font-family: inherit;
+}
+
+button.composer-badge:hover {
+  background: rgb(30 25 43 / 92%);
+}
+
+.composer-badge.is-preview.is-active {
+  background: var(--violet);
+}
+
+/* 本地文档文本预览弹层：固定宽度，内部滚动，不撑动 composer */
+.composer-attachment-doc-preview {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgb(20 15 35 / 18%);
+  left: 0;
+  max-height: 160px;
+  overflow: hidden;
+  padding: 8px 10px;
+  position: absolute;
+  top: calc(100% + 6px);
+  width: 240px;
+  z-index: 30;
+}
+
+.composer-attachment-doc-preview > span {
+  color: var(--ink-soft);
+  display: block;
+  font-size: 11px;
+  line-height: 1.55;
+  max-height: 144px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* 知识库上浮多选弹层（交互参考右上角头像菜单） */
+.kb-menu {
+  display: inline-flex;
+  position: relative;
+}
+
+.kb-menu-popover {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: var(--shadow-md);
+  display: grid;
+  gap: 6px;
+  min-width: 248px;
+  opacity: 0;
+  padding: 12px;
+  pointer-events: none;
+  position: absolute;
+  bottom: calc(100% + 10px);
+  left: 0;
+  transform: translateY(4px);
+  transition: opacity 140ms ease, transform 140ms ease, visibility 140ms;
+  visibility: hidden;
+  z-index: 60;
+}
+
+/* 透明桥接，避免按钮与浮层之间出现缝隙 */
+.kb-menu-popover::before {
+  content: '';
+  height: 12px;
+  left: 0;
+  position: absolute;
+  right: 0;
+  bottom: -12px;
+}
+
+.kb-menu.is-open .kb-menu-popover {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+  visibility: visible;
+}
+
+.kb-menu-head {
+  align-items: center;
+  display: flex;
+  font-size: 13px;
+  justify-content: space-between;
+  padding: 0 2px 6px;
+}
+
+.kb-menu-all {
+  background: none;
+  border: 0;
+  color: var(--violet-dark);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 2px 4px;
+}
+
+.kb-menu-all:hover:not(:disabled) {
+  text-decoration: underline;
+}
+
+.kb-menu-all:disabled {
+  color: var(--ink-muted);
+  cursor: not-allowed;
+}
+
+.kb-menu-list {
+  display: grid;
+  gap: 2px;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.kb-menu-item {
+  align-items: center;
+  border-radius: 8px;
+  display: flex;
+  font-size: 13px;
+  gap: 9px;
+  padding: 7px 8px;
+}
+
+.kb-menu-item:hover {
+  background: var(--surface-soft);
+}
+
+.kb-menu-item input {
+  accent-color: var(--violet);
+  flex: 0 0 auto;
+  height: 15px;
+  margin: 0;
+  width: 15px;
+}
+
+.kb-menu-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kb-menu-status {
+  color: var(--ink-muted);
+  font-size: 11px;
+  margin-left: auto;
+}
+
+.kb-menu-empty {
+  color: var(--ink-muted);
+  font-size: 12px;
+  margin: 0;
+  padding: 8px;
+  text-align: center;
+}
+
+.kb-menu-manage {
+  align-items: center;
+  border-top: 1px solid var(--line);
+  color: var(--ink-soft);
+  display: flex;
+  font-size: 12px;
+  font-weight: 600;
+  gap: 7px;
+  justify-content: center;
+  padding: 9px 4px 2px;
+  text-decoration: none;
+}
+
+.kb-menu-manage:hover {
+  color: var(--violet-dark);
+}
+
+.send-button {
+  align-items: center;
+  background: var(--violet);
+  border: 0;
+  border-radius: 9px;
+  color: white;
+  display: flex;
+  flex: 0 0 auto;
+  height: 34px;
+  justify-content: center;
+  margin-left: auto;
+  transition: background 160ms ease, opacity 160ms ease;
+  width: 34px;
+}
+
+.send-button:hover:not(:disabled) {
+  background: var(--violet-dark);
+}
+
+.send-button:disabled {
+  opacity: 0.34;
+}
+
+.send-button.is-stop {
+  background: #44404d;
+  border-radius: 999px;
+}
+
+.suggestions {
+  display: flex;
+  gap: 6px;
+  margin: 0 auto 8px;
+  max-width: 730px;
+  overflow-x: auto;
+  padding: 2px;
+  scrollbar-width: none;
+}
+
+.suggestions::-webkit-scrollbar {
+  display: none;
+}
+
+.suggestions button {
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--ink-soft);
+  flex: 0 0 auto;
+  font-size: 10px;
+  min-height: 31px;
+  padding: 0 11px;
+  transition: background 160ms ease, border-color 160ms ease;
+}
+
+.suggestions button:hover {
+  background: var(--violet-soft);
+  border-color: #cfc5ff;
+  color: var(--violet-dark);
+}

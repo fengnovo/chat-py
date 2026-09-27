@@ -1,0 +1,85 @@
+# 生产基础设施编排：只跑 Postgres / Redis / MinIO。
+# 应用进程（web / api / worker）由 systemd 在宿主机直接运行 —— 因为 worker 需要调用
+# 宿主 docker CLI 创建沙箱容器，放进容器里 bind mount 路径会对不上。
+#
+# 用法（在仓库根目录）：
+#   docker compose -f deploy/compose.infra.yaml --env-file .env up -d --wait
+#   docker compose -f deploy/compose.infra.yaml --env-file .env down
+#
+# 所有端口只绑定 127.0.0.1，不暴露到公网；外部访问一律走 Nginx。
+name: chat-infra
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    # 2 人规模：调小 shared_buffers，避免在共享型实例上白占内存。
+    command:
+      - postgres
+      - -c
+      - shared_buffers=256MB
+      - -c
+      - max_connections=50
+    environment:
+      POSTGRES_DB: agent
+      POSTGRES_USER: agent
+      # 必须与 .env 里 DATABASE_URL 中的密码一致
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+    ports:
+      - "127.0.0.1:55432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U agent -d agent"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7.4-alpine
+    restart: unless-stopped
+    # BullMQ 要求 maxmemory-policy=noeviction，否则任务可能被静默淘汰。
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --maxmemory
+      - 512mb
+      - --maxmemory-policy
+      - noeviction
+    ports:
+      - "127.0.0.1:56379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?MINIO_ROOT_USER is required}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD is required}
+    ports:
+      - "127.0.0.1:59000:9000"
+      - "127.0.0.1:59001:9001"
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+# 显式命名，方便备份和识别（docker volume ls）
+volumes:
+  postgres-data:
+    name: chat-postgres-data
+  redis-data:
+    name: chat-redis-data
+  minio-data:
+    name: chat-minio-data

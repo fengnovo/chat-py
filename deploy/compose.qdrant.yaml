@@ -1,0 +1,40 @@
+# 可选叠加：Qdrant 向量库。
+#
+# 当前**不需要** —— knowledge-service 还没部署（见 README §11）：没有索引消费者，
+# 也没有检索器，Qdrant 起来了也是空转。等补完 extract / retriever / bootstrap 再启用。
+#
+# 启用方式（与基础编排叠加，不影响已有数据卷）：
+#   docker compose -f deploy/compose.infra.yaml -f deploy/compose.qdrant.yaml \
+#     --env-file .env up -d --wait
+#
+# 资源占用（8核16G 完全够）：
+#   镜像约 300MB；2 人规模常驻内存 200MB ~ 1GB；
+#   磁盘按向量量增长，1024 维 float32 ≈ 4KB/条，1 万条 chunk ≈ 40MB + HNSW 索引开销。
+#
+# 注意：不要和 Postgres 抢同一块磁盘的 IO —— 40G 系统盘要同时放镜像、依赖和会话数据，
+# 上量前先 df -h 看一眼。
+name: chat-infra
+
+services:
+  qdrant:
+    # 生产建议改成固定版本 tag，避免 latest 某天带来不兼容升级
+    image: qdrant/qdrant:latest
+    restart: unless-stopped
+    ports:
+      # 只监听本机；knowledge-service 在同机运行，无需对外
+      - "127.0.0.1:56333:6333"
+      # gRPC，单机验证用不到
+      # - "127.0.0.1:56334:6334"
+    volumes:
+      - qdrant-data:/qdrant/storage
+    healthcheck:
+      # qdrant 镜像不自带 curl/wget，用镜像内 bash 的 TCP 客户端探活
+      # （与 infra/compose.yaml 里的做法保持一致）
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/localhost/6333; printf \"GET /healthz HTTP/1.0\\r\\nHost: localhost\\r\\n\\r\\n\" >&3; grep -q \"200 OK\" <&3'"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  qdrant-data:
+    name: chat-qdrant-data

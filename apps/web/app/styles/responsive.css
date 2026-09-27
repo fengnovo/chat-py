@@ -1,0 +1,378 @@
+@media (max-width: 1160px) {
+  .app-shell {
+    grid-template-columns: 220px minmax(0, 1fr);
+  }
+
+  .app-shell.is-trace-open {
+    grid-template-columns: 220px minmax(0, 1fr) 320px;
+  }
+
+  .app-shell.is-files-open {
+    grid-template-columns: 220px minmax(0, 1fr) var(--files-width, 320px);
+  }
+
+  .app-shell.is-trace-open.is-files-open {
+    grid-template-columns: 220px minmax(0, 1fr) 300px
+      var(--files-width, 320px);
+  }
+
+  .sidebar {
+    padding-left: 13px;
+    padding-right: 13px;
+  }
+
+  .trace-panel {
+    padding-left: 17px;
+    padding-right: 17px;
+  }
+}
+
+@media (max-width: 940px) {
+  .app-shell {
+    grid-template-columns: 78px minmax(0, 1fr);
+  }
+
+  .app-shell.is-trace-open {
+    grid-template-columns: 78px minmax(0, 1fr) 300px;
+  }
+
+  .app-shell.is-files-open {
+    grid-template-columns: 78px minmax(0, 1fr) 300px;
+  }
+
+  .app-shell.is-trace-open.is-files-open {
+    grid-template-columns: 78px minmax(0, 1fr) 280px 300px;
+  }
+
+  .sidebar {
+    align-items: center;
+    padding: 16px 10px;
+  }
+
+  .sidebar-collapse,
+  .sidebar-expand {
+    display: none;
+  }
+
+  .brand {
+    padding: 0 0 22px;
+  }
+
+  .brand > span:nth-child(2),
+  .new-chat-button span,
+  .session-nav .nav-label,
+  .session-copy,
+  .session-more,
+  .session-menu,
+  .load-more-button {
+    display: none;
+  }
+
+  .session-list-status,
+  .session-list-retry {
+    display: none;
+  }
+
+  .new-chat-button {
+    height: 42px;
+    padding: 0;
+    width: 42px;
+  }
+
+  .session-nav {
+    margin-top: 22px;
+    width: 42px;
+  }
+
+  .session-item {
+    display: flex;
+    justify-content: center;
+    min-height: 42px;
+  }
+
+  .session-main {
+    display: flex;
+    justify-content: center;
+    min-height: 40px;
+    padding: 5px;
+    width: 40px;
+  }
+}
+
+@media (max-width: 780px) {
+  .app-shell {
+    display: block;
+    min-height: 100dvh;
+    overflow: hidden;
+  }
+
+  .sidebar {
+    display: none;
+  }
+
+  .app-shell.is-sidebar-open .sidebar {
+    align-items: stretch;
+    box-shadow: 18px 0 48px rgb(18 15 28 / 18%);
+    display: flex;
+    inset: 0 auto 0 0;
+    padding: 18px 16px;
+    position: fixed;
+    width: min(296px, calc(100vw - 48px));
+    z-index: 46;
+  }
+
+  .app-shell.is-sidebar-open .brand {
+    padding: 0 4px 22px;
+  }
+
+  .app-shell.is-sidebar-open .brand > span:last-of-type {
+    display: flex;
+  }
+
+  .app-shell.is-sidebar-open .new-chat-button {
+    height: 46px;
+    width: 100%;
+  }
+
+  .app-shell.is-sidebar-open .new-chat-button span {
+    display: inline;
+  }
+
+  .app-shell.is-sidebar-open .session-nav {
+    margin-top: 22px;
+    width: 100%;
+  }
+
+  .app-shell.is-sidebar-open .session-item {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 32px;
+    min-height: 54px;
+  }
+
+  .app-shell.is-sidebar-open .session-main {
+    display: grid;
+    grid-template-columns: 30px minmax(0, 1fr);
+    justify-content: initial;
+    min-height: 52px;
+    padding: 7px 3px 7px 7px;
+    width: auto;
+  }
+
+  .app-shell.is-sidebar-open .session-copy {
+    display: flex;
+  }
+
+  .app-shell.is-sidebar-open .session-more {
+    display: flex;
+  }
+
+  .app-shell.is-sidebar-open .session-menu {
+    display: block;
+  }
+
+  .app-shell.is-sidebar-open .load-more-button {
+    display: block;
+  }
+
+  .sidebar-close {
+    align-items: center;
+    background: transparent;
+    border: 0;
+    border-radius: 7px;
+    color: var(--ink-muted);
+    display: flex;
+    height: 40px;
+    justify-content: center;
+    margin-left: auto;
+    padding: 0;
+    width: 40px;
+  }
+
+  .sidebar-scrim {
+    background: rgb(18 15 28 / 42%);
+    border: 0;
+    display: block;
+    inset: 0;
+    padding: 0;
+    position: fixed;
+    z-index: 45;
+  }
+
+  .chat-column {
+    height: 100dvh;
+    min-height: 0;
+  }
+
+  .topbar {
+    padding: 0 16px;
+  }
+
+  .mobile-icon-button {
+    display: flex;
+  }
+
+  .trace-scrim {
+    background: rgb(18 16 24 / 44%);
+    border: 0;
+    display: block;
+    inset: 0;
+    position: fixed;
+    z-index: 20;
+  }
+
+  .trace-panel {
+    bottom: 0;
+    box-shadow: -15px 0 40px rgb(17 14 25 / 20%);
+    display: block;
+    max-width: 360px;
+    position: fixed;
+    right: 0;
+    top: 0;
+    transform: translateX(105%);
+    transition: transform 240ms ease;
+    width: calc(100% - 42px);
+    z-index: 21;
+  }
+
+  .trace-panel.is-open {
+    transform: translateX(0);
+  }
+
+  .file-panel {
+    bottom: 0;
+    box-shadow: -15px 0 40px rgb(17 14 25 / 20%);
+    max-width: 420px;
+    position: fixed;
+    right: 0;
+    top: 0;
+    transform: translateX(105%);
+    transition: transform 240ms ease;
+    width: calc(100% - 42px);
+    z-index: 210;
+  }
+
+  .app-shell.is-files-open .file-panel {
+    transform: translateX(0);
+  }
+
+  .file-panel-resizer {
+    display: none;
+  }
+
+  .trace-head .mobile-icon-button {
+    display: flex;
+  }
+}
+
+@media (max-width: 520px) {
+  .modal-layer {
+    align-items: flex-end;
+    padding: 0;
+  }
+
+  .modal-card {
+    border-bottom: 0;
+    border-radius: 15px 15px 0 0;
+    max-height: calc(100dvh - 36px);
+    padding: 20px;
+    width: 100%;
+  }
+
+  .chat-column {
+    grid-template-rows: 56px minmax(0, 1fr) auto;
+  }
+
+  .topbar {
+    padding: 0 12px;
+  }
+
+  .message-list {
+    padding: 28px 15px 22px;
+  }
+
+  .message-row {
+    gap: 9px;
+    margin-bottom: 24px;
+  }
+
+  .avatar {
+    height: 30px;
+    width: 30px;
+  }
+
+  .message-copy {
+    font-size: 15px;
+  }
+
+  .insight-card {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .insight-metric {
+    border-left: 0;
+    border-top: 1px solid #ded8fa;
+    flex: auto;
+    padding-left: 0;
+    padding-top: 11px;
+    width: 100%;
+  }
+
+  .error-banner,
+  .task-failure-banner {
+    align-items: start;
+    grid-template-columns: 30px minmax(0, 1fr);
+    margin-left: 0;
+  }
+
+  .error-icon,
+  .task-failure-icon {
+    height: 30px;
+    width: 30px;
+  }
+
+  .error-banner button,
+  .task-failure-banner button {
+    grid-column: 2;
+    justify-self: start;
+  }
+
+  /* 与 .message-list 的左右内边距（15px）保持一致，过程区与任务列表才会左右对齐。 */
+  .composer-wrap {
+    padding-left: 15px;
+    padding-right: 15px;
+  }
+
+  .agent-interrupt {
+    margin-left: 0;
+    padding: 16px;
+  }
+
+  .agent-interrupt ul li {
+    grid-template-columns: 1fr;
+  }
+
+  .interaction-actions button {
+    flex: 1 1 140px;
+  }
+
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  .streaming-dots i,
+  .pulse-dot,
+  .activity-spinner,
+  .skeleton-panel,
+  .skeleton-line,
+  .skeleton-orb,
+  .skeleton-copy {
+    animation: none !important;
+  }
+}

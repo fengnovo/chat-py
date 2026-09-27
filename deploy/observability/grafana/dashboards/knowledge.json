@@ -1,0 +1,323 @@
+{
+  "uid": "chat-knowledge",
+  "title": "Chat · Knowledge Service",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": false,
+  "style": "dark",
+  "timezone": "browser",
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "refresh": "30s",
+  "tags": [
+    "chat",
+    "observability"
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "quantile",
+        "type": "custom",
+        "label": "Quantile",
+        "query": "0.50 : 0.50,0.95 : 0.95,0.99 : 0.99",
+        "current": {
+          "text": "0.95",
+          "value": "0.95"
+        },
+        "options": [
+          {
+            "text": "0.50",
+            "value": "0.50",
+            "selected": false
+          },
+          {
+            "text": "0.95",
+            "value": "0.95",
+            "selected": true
+          },
+          {
+            "text": "0.99",
+            "value": "0.99",
+            "selected": false
+          }
+        ],
+        "multi": false,
+        "includeAll": false
+      }
+    ]
+  },
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "知识操作速率（operation/outcome）",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "mean"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by (operation, outcome) (rate(knowledge_operation_duration_seconds_count{job=\"knowledge-service\"}[5m]))",
+          "range": true,
+          "legendFormat": "{{operation}}/{{outcome}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "检索延迟",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "mean"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "histogram_quantile($quantile, sum by (le, operation) (rate(knowledge_retrieval_duration_seconds_bucket{job=\"knowledge-service\",operation=~\"search|retrieve\"}[5m])))",
+          "range": true,
+          "legendFormat": "{{operation}} p$quantile"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "MCP HTTP 请求速率",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 8,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "mean"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by (http_route, http_response_status_class) (rate(http_server_requests_total{job=\"knowledge-service\"}[5m]))",
+          "range": true,
+          "legendFormat": "{{http_route}} {{http_response_status_class}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "MCP HTTP p95",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 8,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "mean"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "histogram_quantile(0.95, sum by (le, http_route) (rate(http_server_duration_seconds_bucket{job=\"knowledge-service\"}[5m])))",
+          "range": true,
+          "legendFormat": "{{http_route}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "索引队列等待 p95",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 16,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "mean"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(queue_wait_duration_seconds_bucket{queue=\"knowledge-index\"}[5m])))",
+          "range": true,
+          "legendFormat": "knowledge-index"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "索引消费积压",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 16,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "mean"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum(queue:jobs_inflight:count{queue=\"knowledge-index\"})",
+          "range": true,
+          "legendFormat": "index jobs"
+        }
+      ]
+    }
+  ]
+}

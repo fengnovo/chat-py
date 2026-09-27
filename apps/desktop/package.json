@@ -1,0 +1,25 @@
+{
+  "name": "@repo/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Keen AI Electron client",
+  "type": "module",
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "pnpm build && node --env-file-if-exists=../../.env ../../scripts/start-desktop.mjs",
+    "start": "node --env-file-if-exists=../../.env node_modules/electron/cli.js .",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --import tsx --test test/**/*.test.ts",
+    "dist": "pnpm build && electron-builder --config electron-builder.config.mjs",
+    "dist:mac": "pnpm build && electron-builder --config electron-builder.config.mjs --mac",
+    "dist:win": "pnpm build && electron-builder --config electron-builder.config.mjs --win"
+  },
+  "devDependencies": {
+    "@types/node": "^24.4.0",
+    "electron": "^44.3.0",
+    "electron-builder": "^26.15.3",
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.3"
+  }
+}

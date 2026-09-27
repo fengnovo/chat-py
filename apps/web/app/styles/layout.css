@@ -1,0 +1,56 @@
+.app-shell {
+  display: grid;
+  grid-template-columns: 264px minmax(0, 1fr);
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+  transition: grid-template-columns 260ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.app-shell.is-trace-open {
+  grid-template-columns: 264px minmax(0, 1fr) 360px;
+}
+
+.app-shell.is-files-open {
+  grid-template-columns: 264px minmax(0, 1fr) var(--files-width, 420px);
+}
+
+.app-shell.is-trace-open.is-files-open {
+  grid-template-columns: 264px minmax(0, 1fr) 360px
+    var(--files-width, 420px);
+}
+
+.app-shell.is-sidebar-collapsed {
+  grid-template-columns: 58px minmax(0, 1fr);
+}
+
+.app-shell.is-sidebar-collapsed.is-trace-open {
+  grid-template-columns: 58px minmax(0, 1fr) 360px;
+}
+
+.app-shell.is-sidebar-collapsed.is-files-open {
+  grid-template-columns: 58px minmax(0, 1fr) var(--files-width, 420px);
+}
+
+.app-shell.is-sidebar-collapsed.is-trace-open.is-files-open {
+  grid-template-columns: 58px minmax(0, 1fr) 360px
+    var(--files-width, 420px);
+}
+
+/* 侧边栏完全隐藏：目录拖宽超过文件面板一半时触发 */
+.app-shell.is-sidebar-hidden {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.app-shell.is-sidebar-hidden.is-trace-open {
+  grid-template-columns: minmax(0, 1fr) 360px;
+}
+
+.app-shell.is-sidebar-hidden.is-files-open {
+  grid-template-columns: minmax(0, 1fr) var(--files-width, 420px);
+}
+
+.app-shell.is-sidebar-hidden.is-trace-open.is-files-open {
+  grid-template-columns: minmax(0, 1fr) 360px
+    var(--files-width, 420px);
+}

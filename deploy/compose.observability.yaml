@@ -1,0 +1,191 @@
+# 本地可观测性后端 PoC：Alloy + Tempo + Loki + Prometheus + Grafana。
+#
+# 与 compose.infra.yaml 完全解耦：不复制/不依赖 PostgreSQL、Redis、MinIO、Qdrant；
+# 观测组件全部在独立网络内，仅 OTLP/Grafana/Prometheus UI 端口绑定宿主 loopback。
+# 应用进程（systemd 直跑在宿主）通过 http://127.0.0.1:4318 推送 OTLP。
+#
+# 独立启动：
+#   GRAFANA_ADMIN_PASSWORD=... docker compose -f deploy/compose.observability.yaml up -d --wait
+# 与基础设施一起展开校验（不启动）：
+#   docker compose -f deploy/compose.infra.yaml -f deploy/compose.observability.yaml config
+#
+# 资源上限按 2 人共享宿主调小；任何组件 OOM 只影响观测，不影响业务。
+name: chat-observability
+
+services:
+  alloy:
+    image: grafana/alloy:v1.4.3
+    restart: unless-stopped
+    command:
+      - run
+      - --server.http.listen-addr=0.0.0.0:12345
+      - --storage.path=/var/lib/alloy/data
+      - /etc/alloy/config.alloy
+    ports:
+      # 应用 OTLP 入口，仅 loopback
+      - "127.0.0.1:4317:4317"
+      - "127.0.0.1:4318:4318"
+      # Alloy UI / 自监控
+      - "127.0.0.1:12345:12345"
+    volumes:
+      - ./observability/alloy/config.alloy:/etc/alloy/config.alloy:ro
+      # 宿主 systemd 日志（无 journal 的宿主上为空，组件自动空转）
+      - /var/log/journal:/var/log/journal:ro
+      # Docker 容器日志发现（只挂载只读 socket）
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - alloy-data:/var/lib/alloy/data
+    healthcheck:
+      # grafana/alloy 镜像不含 curl/wget，用 bash 内建 /dev/tcp 做就绪探测
+      test:
+        - CMD
+        - /bin/bash
+        - -c
+        - exec 3<>/dev/tcp/127.0.0.1/12345 && printf 'GET /-/ready HTTP/1.0\r\n\r\n' >&3 && grep -q '200 OK' <&3
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+
+  tempo:
+    image: grafana/tempo:2.6.1
+    restart: unless-stopped
+    command: ["-config.file=/etc/tempo.yaml"]
+    volumes:
+      - ./observability/tempo/tempo.yaml:/etc/tempo.yaml:ro
+      - tempo-data:/var/tempo
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3100/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+
+  loki:
+    image: grafana/loki:3.2.1
+    restart: unless-stopped
+    command: ["-config.file=/etc/loki.yaml"]
+    volumes:
+      - ./observability/loki/loki.yaml:/etc/loki.yaml:ro
+      - loki-data:/loki
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3100/ready || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+    deploy:
+      resources:
+        limits:
+          cpus: "0.75"
+          memory: 384M
+
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    restart: unless-stopped
+    # remote-write receiver 是 Alloy 指标入口，必须显式开启
+    command:
+      - --config.file=/etc/prometheus/prometheus.yaml
+      - --web.enable-remote-write-receiver
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=7d
+    volumes:
+      - ./observability/prometheus/prometheus.yaml:/etc/prometheus/prometheus.yaml:ro
+      - ./observability/prometheus/rules:/etc/prometheus/rules:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "127.0.0.1:39090:9090"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:9090/-/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+    deploy:
+      resources:
+        limits:
+          cpus: "0.75"
+          memory: 512M
+
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    restart: unless-stopped
+    # Alertmanager 本身不支持 config env 展开，由 entrypoint.sh 注入 webhook URL
+    entrypoint: ["/bin/sh", "/entrypoint.sh"]
+    environment:
+      # 默认指向 RFC 2606 保留 .invalid 域名：配置合法但永不投递；
+      # 生产部署时注入真实 webhook（PAGE_/URGENT_/TICKET_WEBHOOK_URL）。
+      PAGE_WEBHOOK_URL: ${PAGE_WEBHOOK_URL:-http://notify-page.disabled.invalid/hook}
+      URGENT_WEBHOOK_URL: ${URGENT_WEBHOOK_URL:-http://notify-urgent.disabled.invalid/hook}
+      TICKET_WEBHOOK_URL: ${TICKET_WEBHOOK_URL:-http://notify-ticket.disabled.invalid/hook}
+    volumes:
+      - ./observability/alertmanager/alertmanager.yaml:/etc/alertmanager/alertmanager.yaml:ro
+      - ./observability/alertmanager/entrypoint.sh:/entrypoint.sh:ro
+      - alertmanager-data:/alertmanager
+    ports:
+      - "127.0.0.1:39093:9093"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:9093/-/healthy"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 128M
+
+  grafana:
+    image: grafana/grafana:11.2.0
+    restart: unless-stopped
+    depends_on:
+      prometheus:
+        condition: service_healthy
+      loki:
+        condition: service_healthy
+      tempo:
+        condition: service_healthy
+    environment:
+      # 初始管理员只从宿主 env 注入；禁止匿名访问与自助注册
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?GRAFANA_ADMIN_PASSWORD is required}
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_DISABLE_LOGIN_FORM: "false"
+    ports:
+      - "127.0.0.1:33000:3000"
+    volumes:
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/api/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+    deploy:
+      resources:
+        limits:
+          cpus: "0.75"
+          memory: 384M
+
+volumes:
+  alloy-data:
+    name: chat-obs-alloy-data
+  tempo-data:
+    name: chat-obs-tempo-data
+  loki-data:
+    name: chat-obs-loki-data
+  prometheus-data:
+    name: chat-obs-prometheus-data
+  alertmanager-data:
+    name: chat-obs-alertmanager-data
+  grafana-data:
+    name: chat-obs-grafana-data

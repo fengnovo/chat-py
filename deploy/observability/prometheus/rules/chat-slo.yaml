@@ -1,0 +1,252 @@
+# Chat SLO 录制规则与业务告警（Task 10）
+#
+# 指标来自 OTel SDK -> Alloy -> Prometheus remote-write，命名经 Prometheus 归一化：
+# 服务名在 `job` 标签（= OTel service.name），直方图单位 ms 被换算为 seconds。
+# 维护窗口：发布/演练前在 Alertmanager 对对应 service 建 silence（见 slo-and-alerts.md），
+# 不在 PromQL 里硬编码时间排除。
+groups:
+  - name: chat-slo-recordings
+    interval: 30s
+    rules:
+      # ---- API 可用性（5xx/other 占比），按服务 ----
+      - record: job:slo_availability:ratio_5m
+        expr: >-
+          1 - (
+            sum by (job) (rate(http_server_requests_total{job=~"agent-api|knowledge-service",http_response_status_class=~"5xx|other"}[5m]))
+            /
+            clamp_min(sum by (job) (rate(http_server_requests_total{job=~"agent-api|knowledge-service"}[5m])), 0.000001)
+          )
+
+      # ---- API 非 SSE p95（排除 SSE events 长连接路由），按路由 ----
+      - record: route:api_http_duration:p95_seconds_5m
+        expr: >-
+          histogram_quantile(0.95,
+            sum by (le, http_route) (
+              rate(http_server_duration_seconds_bucket{job="agent-api",http_route!~".*/events"}[5m])
+            )
+          )
+
+      # ---- SSE 首字节 p95（chat / events 两种 operation）----
+      - record: operation:sse_first_byte:p95_seconds_5m
+        expr: >-
+          histogram_quantile(0.95,
+            sum by (le, operation) (
+              rate(sse_first_byte_duration_seconds_bucket{job="agent-api"}[5m])
+            )
+          )
+
+      # ---- Worker 任务成功率（completed / (completed + failed)）----
+      - record: job:slo_worker_success:ratio_15m
+        expr: >-
+          sum(rate(queue_jobs_completed_total{queue="agent-runs"}[15m]))
+          /
+          clamp_min(
+            sum(rate(queue_jobs_completed_total{queue="agent-runs"}[15m]))
+            + sum(rate(queue_jobs_failed_total{queue="agent-runs"}[15m])),
+            0.000001
+          )
+
+      # ---- Worker 在途+排队积压（started - completed - failed，重启后负值归零）----
+      - record: queue:jobs_inflight:count
+        expr: >-
+          max(
+            sum by (queue, job_kind) (queue_jobs_started_total)
+            - sum by (queue, job_kind) (queue_jobs_completed_total)
+            - sum by (queue, job_kind) (queue_jobs_failed_total)
+            > 0
+          )
+
+      # ---- 队列等待 p95（oldest age 代理：等待时间分位）----
+      - record: queue:wait_duration:p95_seconds_5m
+        expr: >-
+          histogram_quantile(0.95,
+            sum by (le, queue, job_kind) (
+              rate(queue_wait_duration_seconds_bucket[5m])
+            )
+          )
+
+      # ---- 知识检索 p95（retrieve/search 操作）----
+      - record: operation:knowledge_retrieval:p95_seconds_5m
+        expr: >-
+          histogram_quantile(0.95,
+            sum by (le, operation) (
+              rate(knowledge_retrieval_duration_seconds_bucket{job="knowledge-service",operation=~"search|retrieve"}[5m])
+            )
+          )
+
+  # ===========================================================================
+  # 告警：三级 —— page（立即处理）/ urgent（工作时间 1h 内）/ ticket（排期跟进）
+  # ===========================================================================
+  - name: chat-slo-alerts
+    interval: 30s
+    rules:
+      # ---- Page ----
+      - alert: APIAvailabilityBurn
+        expr: >-
+          (1 - job:slo_availability:ratio_5m{job="agent-api"}) > 0.05
+          and sum by (job) (rate(http_server_requests_total{job="agent-api"}[5m])) > 0.2
+        for: 5m
+        labels:
+          severity: page
+          team: platform
+          service: agent-api
+        annotations:
+          summary: "API 5xx 比例超过 5%（5m），可用性 SLO 快速燃烧"
+          runbook_url: "https://github.com/fengnovo/chat/blob/main/docs/observability/runbooks/api-latency.md"
+
+      - alert: WorkerRunFailureRateHigh
+        expr: job:slo_worker_success:ratio_15m < 0.99
+        for: 10m
+        labels:
+          severity: page
+          team: platform
+          service: agent-worker
+        annotations:
+          summary: "Worker 任务成功率低于 99%（15m）"
+          runbook_url: "https://github.com/fengnovo/chat/blob/main/docs/observability/runbooks/worker-backlog.md"
+
+      - alert: WorkerQueueBacklog
+        expr: sum(queue:jobs_inflight:count{queue="agent-runs"}) > 10
+        for: 15m
+        labels:
+          severity: page
+          team: platform
+          service: agent-worker
+        annotations:
+          summary: "agent-runs 在途/排队积压持续超过 10（15m）"
+          runbook_url: "https://github.com/fengnovo/chat/blob/main/docs/observability/runbooks/worker-backlog.md"
+
+      - alert: OutboxDispatchFailing
+        expr: sum(rate(outbox_dispatch_total{outcome="failed"}[10m])) > 0
+        for: 10m
+        labels:
+          severity: page
+          team: platform
+          service: agent-api
+        annotations:
+          summary: "Outbox 派发持续失败，run 任务无法投递到 Worker"
+          runbook_url: "https://github.com/fengnovo/chat/blob/main/docs/observability/runbooks/worker-backlog.md"
+
+      # ---- Urgent ----
+      - alert: APINonSSELatencyHigh
+        expr: >-
+          max by (http_route) (route:api_http_duration:p95_seconds_5m) > 0.5
+        for: 15m
+        labels:
+          severity: urgent
+          team: platform
+          service: agent-api
+        annotations:
+          summary: "API 非 SSE 路由 {{ $labels.http_route }} p95 超过 500ms（15m）"
+          runbook_url: "https://github.com/fengnovo/chat/blob/main/docs/observability/runbooks/api-latency.md"
+
+      - alert: SSEFirstByteLatencyHigh
+        expr: operation:sse_first_byte:p95_seconds_5m > 2
+        for: 15m
+        labels:
+          severity: urgent
+          team: platform
+          service: agent-api
+        annotations:
+          summary: "SSE {{ $labels.operation }} 首字节 p95 超过 2s（15m）"
+          runbook_url: "https://github.com/fengnovo/chat/blob/main/docs/observability/runbooks/api-latency.md"
+
+      - alert: SSEDisconnectSpike
+        expr: >-
+          sum by (reason) (
+            rate(sse_disconnects_total{reason=~"server|error|timeout"}[10m])
+          ) > 0.1
+        for: 10m
+        labels:
+          severity: urgent
+          team: platform
+          service: agent-api
+        annotations:
+          summary: "SSE 异常断连（{{ $labels.reason }}）速率超过 0.1/s（10m）"
+          runbook_url: "https://github.com/fengnovo/chat/blob/main/docs/observability/runbooks/api-latency.md"
+
+      - alert: QueueWaitDurationHigh
+        expr: queue:wait_duration:p95_seconds_5m > 300
+        for: 10m
+        labels:
+          severity: urgent
+          team: platform
+          service: agent-worker
+        annotations:
+          summary: "{{ $labels.queue }}/{{ $labels.job_kind }} 等待 p95 超过 5 分钟"
+          runbook_url: "https://github.com/fengnovo/chat/blob/main/docs/observability/runbooks/worker-backlog.md"
+
+      - alert: KnowledgeServiceAvailabilityBurn
+        expr: >-
+          (1 - job:slo_availability:ratio_5m{job="knowledge-service"}) > 0.05
+          and sum by (job) (rate(http_server_requests_total{job="knowledge-service"}[5m])) > 0.1
+        for: 5m
+        labels:
+          severity: urgent
+          team: platform
+          service: knowledge-service
+        annotations:
+          summary: "Knowledge Service 5xx 比例超过 5%（5m）"
+          runbook_url: "https://github.com/fengnovo/chat/blob/main/docs/observability/runbooks/model-provider-failure.md"
+
+      - alert: KnowledgeRetrievalLatencyHigh
+        expr: max(operation:knowledge_retrieval:p95_seconds_5m) > 2
+        for: 15m
+        labels:
+          severity: urgent
+          team: platform
+          service: knowledge-service
+        annotations:
+          summary: "知识检索 p95 超过 2s（15m）"
+          runbook_url: "https://github.com/fengnovo/chat/blob/main/docs/observability/runbooks/model-provider-failure.md"
+
+      - alert: ModelCircuitOpen
+        expr: >-
+          sum by (provider, model) (
+            increase(model_circuit_total{state="open"}[5m])
+          ) > 0
+        for: 2m
+        labels:
+          severity: urgent
+          team: platform
+          service: agent-worker
+        annotations:
+          summary: "模型熔断打开：{{ $labels.provider }}/{{ $labels.model }}"
+          runbook_url: "https://github.com/fengnovo/chat/blob/main/docs/observability/runbooks/model-provider-failure.md"
+
+      # ---- Ticket ----
+      - alert: ModelRetrySpike
+        expr: sum(rate(model_retries_total[30m])) > 0.2
+        for: 30m
+        labels:
+          severity: ticket
+          team: platform
+          service: agent-worker
+        annotations:
+          summary: "模型重试速率持续偏高（>0.2/s，30m）"
+          runbook_url: "https://github.com/fengnovo/chat/blob/main/docs/observability/runbooks/model-provider-failure.md"
+
+      - alert: ModelFallbackSpike
+        expr: sum(rate(model_fallbacks_total[30m])) > 0.05
+        for: 30m
+        labels:
+          severity: ticket
+          team: platform
+          service: agent-worker
+        annotations:
+          summary: "模型降级（fallback）速率持续偏高（>0.05/s，30m）"
+          runbook_url: "https://github.com/fengnovo/chat/blob/main/docs/observability/runbooks/model-provider-failure.md"
+
+      - alert: AgentPhaseFailure
+        expr: >-
+          sum by (phase) (
+            increase(agent_phase_duration_seconds_count{outcome="failure"}[15m])
+          ) > 3
+        for: 15m
+        labels:
+          severity: ticket
+          team: platform
+          service: agent-worker
+        annotations:
+          summary: "Agent 阶段 {{ $labels.phase }} 15m 内失败超过 3 次"
+          runbook_url: "https://github.com/fengnovo/chat/blob/main/docs/observability/runbooks/worker-backlog.md"
