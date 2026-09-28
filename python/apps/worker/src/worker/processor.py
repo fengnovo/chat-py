@@ -497,14 +497,14 @@ async def prepare_run_attachments(
         def _quote(v: str) -> str:
             return "'" + v.replace("'", "'\\''") + "'"
         directories = list({str(p.rsplit("/", 1)[0]) for p, _ in sandbox_files})
-        await sandbox.execute(
+        await sandbox.aexecute(
             f"mkdir -p {' '.join(_quote(d) for d in directories)}"
         )
-        results = await sandbox.upload_files(sandbox_files)
+        results = await sandbox.aupload_files(sandbox_files)
         for r in results:
-            if r.get("error"):
+            if r.error:
                 raise RuntimeError(
-                    f"Failed to upload attachment {r.get('path')}: {r.get('error')}"
+                    f"Failed to upload attachment {r.path}: {r.error}"
                 )
         appended_message += (
             "\n\n以下附件已上传到工作区根目录："

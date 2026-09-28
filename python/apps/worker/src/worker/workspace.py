@@ -8,8 +8,9 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path, PurePosixPath
-from typing import Any, Protocol
+from typing import Any
 
+from deepagents.backends.protocol import SandboxBackendProtocol
 from pydantic import BaseModel, Field
 
 
@@ -23,14 +24,9 @@ class _ProjectFile(BaseModel):
     content_base64: str = Field(alias="contentBase64", min_length=1)
 
 
-class RemoteWorkspaceSandbox(Protocol):
-    """沙箱接口抽象：docker 与 e2b 后端统一接口。"""
-
-    async def execute(self, command: str) -> dict[str, Any]:
-        ...
-
-    async def upload_files(self, files: list[tuple[str, bytes]]) -> list[dict[str, Any]]:
-        ...
+# deepagents 0.7 的 SandboxBackendProtocol：sync execute/upload_files 仅满足 ABC 契约，
+# Docker/E2B 实现里真实逻辑都在 async aexecute/aupload_files 上。
+RemoteWorkspaceSandbox = SandboxBackendProtocol
 
 
 class AgentResources:
@@ -60,11 +56,11 @@ def remote_workspace_path(configured_path: str) -> str:
 
 
 async def _checked_execute(sandbox: RemoteWorkspaceSandbox, command: str) -> str:
-    result = await sandbox.execute(command)
-    exit_code = result.get("exit_code")
+    result = await sandbox.aexecute(command)
+    exit_code = result.exit_code
     if exit_code not in (0, None):
-        raise RuntimeError(result.get("output", "").strip() or f"Command failed: {command}")
-    return result.get("output", "")
+        raise RuntimeError(result.output.strip() or f"Command failed: {command}")
+    return result.output
 
 
 def _shell_quote(value: str) -> str:
@@ -97,7 +93,7 @@ async def _link_offline_web_runtime(
         f"ln -sfn \"$b\" {_shell_quote(node_modules)}/.bin/\"$(basename \"$b\")\"; done\n"
         f"fi"
     )
-    await sandbox.execute(script)
+    await sandbox.aexecute(script)
 
 
 async def prepare_workspace(
@@ -148,11 +144,11 @@ async def prepare_workspace(
         await _checked_execute(
             sandbox, f"mkdir -p -- {' '.join(_shell_quote(d) for d in directories)}"
         )
-    results = await sandbox.upload_files(files)
+    results = await sandbox.aupload_files(files)
     for result in results:
-        if result.get("error"):
+        if result.error:
             raise RuntimeError(
-                f"Upload restore failed for {result.get('path')}: {result.get('error')}"
+                f"Upload restore failed for {result.path}: {result.error}"
             )
     return workspace
 
@@ -191,11 +187,11 @@ async def upload_agent_resources(
         await _checked_execute(
             sandbox, f"mkdir -p -- {' '.join(_shell_quote(d) for d in directories)}"
         )
-        uploaded = await sandbox.upload_files(files)
+        uploaded = await sandbox.aupload_files(files)
         for result in uploaded:
-            if result.get("error"):
+            if result.error:
                 raise RuntimeError(
-                    f"无法上传 Agent 配置：{result.get('path')} ({result.get('error')})"
+                    f"无法上传 Agent 配置：{result.path} ({result.error})"
                 )
 
     return AgentResources(

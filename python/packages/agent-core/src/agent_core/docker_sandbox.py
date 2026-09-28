@@ -3,6 +3,12 @@
 对应 TS 的 DockerSandboxBackend：每次 execute 启动一个短生命周期容器，
 通过受限 bind mount 复用本轮工作区。容器无网络、只读根文件系统、
 丢弃全部 capability，且不能访问宿主 Docker socket。
+
+切换到 deepagents 0.7 后，本类直接继承 `deepagents.backends.sandbox.BaseSandbox`。
+Docker 沙箱用 asyncio.create_subprocess_exec 起容器，是 async 路径：
+- sync `execute` / `upload_files` / `download_files` raise RuntimeError（仅满足 ABC 契约）
+- override async `aexecute` / `aupload_files` / `adownload_files`，承载真实 async 逻辑
+- BaseSandbox 的 `als/aread/awrite/aedit/agrep/aglob` 默认实现会调上述 async 方法
 """
 
 from __future__ import annotations
@@ -20,13 +26,14 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from .types import (
-    BaseSandbox,
+from deepagents.backends.protocol import (
     ExecuteResponse,
     FileDownloadResponse,
-    FileOperationError,
     FileUploadResponse,
 )
+from deepagents.backends.sandbox import BaseSandbox
+
+from .types import FileOperationError
 
 logger = logging.getLogger(__name__)
 
@@ -190,6 +197,10 @@ def _append_bounded(
 class DockerSandboxBackend(BaseSandbox):
     """DeepAgent 看到的工作区根是 /mnt/user-data；它与仓库源码目录没有任何映射关系。"""
 
+    # deepagents.BaseSandbox 把 `id` 声明为 abstract property；这里用类级属性
+    # 覆盖以解除抽象（运行时由 __init__ 写入实例值）。
+    id: str = ""
+
     def __init__(self, options: DockerSandboxOptions) -> None:
         # sessionId 只用于生成服务端目录和容器名称，不允许成为任意宿主路径。
         normalized_session_id = re.sub(
@@ -278,17 +289,23 @@ class DockerSandboxBackend(BaseSandbox):
 
         await asyncio.to_thread(_mkdirs)
 
-    async def execute(self, command: str) -> ExecuteResponse:
+    def execute(self, command: str, *, timeout: int | None = None) -> ExecuteResponse:
+        """sync execute 不可用：Docker 路径走 asyncio.create_subprocess_exec，请用 aexecute。"""
+        raise RuntimeError(
+            "DockerSandboxBackend.execute (sync) 不可用：Docker 路径仅支持 async，请用 aexecute"
+        )
+
+    async def aexecute(self, command: str, *, timeout: int | None = None) -> ExecuteResponse:
         if self._closed:
-            return {"output": "Docker 沙箱已经关闭。", "exitCode": 1, "truncated": False}
+            return ExecuteResponse(output="Docker 沙箱已经关闭。", exit_code=1, truncated=False)
         if not command.strip():
-            return {"output": "命令不能为空。", "exitCode": 2, "truncated": False}
+            return ExecuteResponse(output="命令不能为空。", exit_code=2, truncated=False)
         if len(command) > MAX_COMMAND_LENGTH:
-            return {
-                "output": f"命令长度超过 {MAX_COMMAND_LENGTH} 个字符。",
-                "exitCode": 2,
-                "truncated": False,
-            }
+            return ExecuteResponse(
+                output=f"命令长度超过 {MAX_COMMAND_LENGTH} 个字符。",
+                exit_code=2,
+                truncated=False,
+            )
 
         # 纵深防御：检测针对关键路径的破坏性命令并记录告警。
         # 真正的拦截由 /mnt/user-data 的只读 bind mount 保证，这里仅用于审计日志。
@@ -430,13 +447,19 @@ class DockerSandboxBackend(BaseSandbox):
             text += ("\n" if text else "") + str(spawn_error)
         if timed_out:
             text += ("\n" if text else "") + f"命令执行超过 {self._command_timeout_ms}ms，已终止容器。"
-        return {
-            "output": text or ("命令执行成功。" if exit_code == 0 else "命令执行失败。"),
-            "exitCode": 124 if timed_out else exit_code,
-            "truncated": bool(output_state["truncated"]),
-        }
+        return ExecuteResponse(
+            output=text or ("命令执行成功。" if exit_code == 0 else "命令执行失败。"),
+            exit_code=124 if timed_out else exit_code,
+            truncated=bool(output_state["truncated"]),
+        )
 
-    async def upload_files(self, files: list[tuple[str, bytes]]) -> list[FileUploadResponse]:
+    def upload_files(self, files: list[tuple[str, bytes]]) -> list[FileUploadResponse]:
+        """sync upload_files 不可用：Docker 路径仅支持 async，请用 aupload_files。"""
+        raise RuntimeError(
+            "DockerSandboxBackend.upload_files (sync) 不可用：Docker 路径仅支持 async，请用 aupload_files"
+        )
+
+    async def aupload_files(self, files: list[tuple[str, bytes]]) -> list[FileUploadResponse]:
         # BaseSandbox 的 write/edit 最终会走这个适配器。这里写的是服务端创建的
         # 会话暂存目录，不是调用进程 cwd，更不会接受任意宿主绝对路径。
         results: list[FileUploadResponse] = []
@@ -451,16 +474,22 @@ class DockerSandboxBackend(BaseSandbox):
                     os.chmod(target, 0o666)
 
                 await asyncio.to_thread(_write)
-                results.append({"path": file_path, "error": None})
+                results.append(FileUploadResponse(path=file_path, error=None))
             except Exception as error:
-                results.append({"path": file_path, "error": _to_file_error(error)})
+                results.append(FileUploadResponse(path=file_path, error=_to_file_error(error)))
         return results
 
     async def assert_writable_path(self, file_path: str) -> None:
         """在进入 BaseSandbox 工具前校验受限写入路径。"""
         await self._resolve_host_path(file_path, True)
 
-    async def download_files(self, paths: list[str]) -> list[FileDownloadResponse]:
+    def download_files(self, paths: list[str]) -> list[FileDownloadResponse]:
+        """sync download_files 不可用：Docker 路径仅支持 async，请用 adownload_files。"""
+        raise RuntimeError(
+            "DockerSandboxBackend.download_files (sync) 不可用：Docker 路径仅支持 async，请用 adownload_files"
+        )
+
+    async def adownload_files(self, paths: list[str]) -> list[FileDownloadResponse]:
         # 二进制读取和 edit 的读阶段会走这里；符号链接必须在读取前拒绝，
         # 避免容器先创建链接再诱导宿主适配器读取链接目标。
         results: list[FileDownloadResponse] = []
@@ -478,10 +507,16 @@ class DockerSandboxBackend(BaseSandbox):
                         return handle.read()
 
                 content = await asyncio.to_thread(_read)
-                results.append({"path": file_path, "content": content, "error": None})
+                results.append(
+                    FileDownloadResponse(path=file_path, content=content, error=None)
+                )
             except Exception as error:
                 results.append(
-                    {"path": file_path, "content": None, "error": _to_file_error(error)}
+                    FileDownloadResponse(
+                        path=file_path,
+                        content=None,
+                        error=_to_file_error(error),
+                    )
                 )
         return results
 

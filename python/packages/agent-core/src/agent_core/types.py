@@ -6,9 +6,8 @@ zod schema 在 Python 侧统一替换为 Pydantic 模型；跨模块共享、不
 
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
 from collections.abc import AsyncIterator, Awaitable, Callable
-from typing import Any, Literal, Protocol, TypedDict, runtime_checkable
+from typing import Any, Literal, Protocol, runtime_checkable
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -293,41 +292,25 @@ class HeadlessAgentRuntime(Protocol):
     async def dispose(self) -> None: ...
 
 
-# ─── 沙箱基座（deepagents BaseSandbox 的 Python 等价物） ──────────────────────
-
-
-class ExecuteResponse(TypedDict):
-    output: str
-    exitCode: int | None
-    truncated: bool
-
-
+# ─── 沙箱基座（直接复用 deepagents 0.7 的 BaseSandbox/响应类型） ───────────
+# 切换到官方 deepagents 包后，本地不再自定义 BaseSandbox/ExecuteResponse 等
+# 协议类型；E2BSandbox / DockerSandboxBackend 直接继承 deepagents.BaseSandbox，
+# 响应也直接返回 deepagents 的 dataclass（字段为 snake_case，与官方一致）。
+#
+# FileOperationError 仍在本模块定义：deepagents 内部用的是同一组字面量，
+# 但本地实现里 _classify_file_error / _to_file_error 返回这些值，外部消费者
+# （worker/processor）不直接访问该 Literal 类型，保留本地定义以减少改动面。
 FileOperationError = Literal["file_not_found", "is_directory", "permission_denied", "invalid_path"]
 
-
-class FileUploadResponse(TypedDict):
-    path: str
-    error: FileOperationError | None
-
-
-class FileDownloadResponse(TypedDict):
-    path: str
-    content: bytes | None
-    error: FileOperationError | None
-
-
-class BaseSandbox(ABC):
-    """deepagents 的 BaseSandbox 抽象在 Python 侧的等价基类。
-
-    沙箱提供命令执行与文件上传/下载三组原语，Agent 的文件系统/命令工具
-    （execute / write_file / read_file / edit_file / delete）在此之上实现。
-    """
-
-    @abstractmethod
-    async def execute(self, command: str) -> ExecuteResponse: ...
-
-    @abstractmethod
-    async def upload_files(self, files: list[tuple[str, bytes]]) -> list[FileUploadResponse]: ...
-
-    @abstractmethod
-    async def download_files(self, paths: list[str]) -> list[FileDownloadResponse]: ...
+try:  # pragma: no cover - 依赖 deepagents 包；切换后才安装
+    from deepagents.backends.protocol import (
+        ExecuteResponse,
+        FileDownloadResponse,
+        FileUploadResponse,
+    )
+    from deepagents.backends.sandbox import BaseSandbox
+except Exception as e:  # pragma: no cover - 缺包时给清晰错误
+    raise ImportError(
+        "agent-core 现在依赖 deepagents 包（>=0.7.19），请先在 python 工作区执行 "
+        "`uv add --package agent-core deepagents`"
+    ) from e

@@ -11,6 +11,7 @@ dependencies = [
     "langchain-mcp-adapters",
     "e2b",
     "pydantic>=2.10",
+    "deepagents>=0.7.19",
 ]
 
 [build-system]

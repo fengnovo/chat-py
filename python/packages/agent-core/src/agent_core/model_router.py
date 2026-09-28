@@ -309,15 +309,10 @@ async def create_resilient_model_router(options: RouterOptions) -> ModelRouter:
         }
         if spec.base_url:
             kwargs["base_url"] = spec.base_url
-        try:
-            instance = init_chat_model(
-                spec.model,
-                configurable_fields=["temperature", "max_tokens"],
-                **kwargs,
-            )
-        except TypeError:
-            # 旧版 langchain 不支持 configurable_fields 参数时降级。
-            instance = init_chat_model(spec.model, **kwargs)
+        # 不传 configurable_fields：带它 init_chat_model 返回 _ConfigurableModel
+        # （非 BaseChatModel 实例），deepagents.resolve_model 会误按字符串 spec
+        # 走 init_chat_model 而崩溃；且当前没有任何调用方做运行时参数覆盖。
+        instance = init_chat_model(spec.model, **kwargs)
         candidates.append(_Candidate(spec=spec, instance=instance))
 
     primary = candidates[0]

@@ -1,10 +1,12 @@
 """主 Deep Agent 运行时（P1 同步 + P2 评审 + P3 后台）。
 
-对应 TS 的 createDeepAgentRuntime / createDeepAgent：
-- 用 langgraph.prebuilt.create_react_agent 替代 deepagents 的 createDeepAgent；
-- 用 langgraph.types.interrupt + Command 替代 TS 的 interrupt / Command；
+切换到 LangChain 官方 deepagents 包后的实现：
+- 图由 `deepagents.create_deep_agent` 装配（自动堆叠 FilesystemMiddleware /
+  SubAgentMiddleware / SummarizationMiddleware / PatchToolCallsMiddleware 等
+  内置中间件，并提供 ls/read_file/write_file/edit_file/glob/grep/execute 工具）；
+- 用 langgraph.types.interrupt + Command 复刻 TS 的 interrupt / Command；
 - 用 get_stream_writer() 替代 getWriter()；
-- 模型调用上限、HITL、todo、历史压缩均以 langchain / langgraph 机制复刻。
+- 模型调用上限、HITL、todo、历史压缩复用 langchain / langgraph 机制。
 """
 
 from __future__ import annotations
@@ -19,6 +21,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from deepagents import create_deep_agent
+from langchain.agents.middleware import ModelCallLimitMiddleware
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.tools import BaseTool, StructuredTool, tool
 
@@ -27,7 +31,6 @@ from .mcp_client_cache import get_shared_mcp_tools_for_config_path
 from .subagent import (
     BackgroundRunContext,
     SpawnSubagentOptions,
-    create_agent_graph,
     create_background_run_context,
     create_spawn_subagent_tool,
 )
@@ -492,42 +495,6 @@ def _wrap_tool_with_approval(original: BaseTool, approval_rule: dict[str, Any] |
     )
 
 
-# ─── 模型调用上限包装 ─────────────────────────────────────────────────────────
-
-
-class _ModelCallLimitWrapper:
-    """包装 chat model，统计调用次数；超限后返回固定 AIMessage。"""
-
-    def __init__(self, model: Any, run_limit: int, thread_limit: int) -> None:
-        self._model = model
-        self._run_limit = run_limit
-        self._thread_limit = thread_limit
-        self._run_count = 0
-        self._thread_count = 0
-
-    async def ainvoke(self, input: Any, config: Any = None, **kwargs: Any) -> Any:
-        if self._run_count >= self._run_limit:
-            return AIMessage(
-                content=f"Model call limits exceeded for this run ({self._run_limit})."
-            )
-        if self._thread_count >= self._thread_limit:
-            return AIMessage(
-                content=f"Model call limits exceeded for this thread ({self._thread_limit})."
-            )
-        self._run_count += 1
-        self._thread_count += 1
-        return await self._model.ainvoke(input, config, **kwargs)
-
-    def bind_tools(self, *args: Any, **kwargs: Any) -> Any:
-        return self._model.bind_tools(*args, **kwargs)
-
-    def with_structured_output(self, *args: Any, **kwargs: Any) -> Any:
-        return self._model.with_structured_output(*args, **kwargs)
-
-    def __getattr__(self, name: str) -> Any:
-        return getattr(self._model, name)
-
-
 # ─── 主运行时构造 ─────────────────────────────────────────────────────────────
 
 
@@ -719,14 +686,27 @@ async def create_deep_agent_runtime(
         ])
     system_prompt = "\n".join(system_prompt_lines)
 
-    # 模型调用上限包装
-    model_with_limits = _ModelCallLimitWrapper(
-        router.primary,
+    # 模型调用上限：用 langchain 官方 ModelCallLimitMiddleware（exit_behavior="error"
+    # 时抛出 ModelCallLimitExceededError，消息 "Model call limits exceeded: ..."，
+    # 会被 _is_step_limit_error 识别为 AGENT_STEP_LIMIT）。
+    # 不能包装 model 实例——deepagents.resolve_model 对非 BaseChatModel 会按字符串
+    # spec 走 init_chat_model（model.partition(":") 直接 AttributeError）。
+    model_call_limit = ModelCallLimitMiddleware(
         run_limit=options.model_call_limit or DEFAULT_MODEL_CALL_LIMIT,
         thread_limit=DEFAULT_THREAD_MODEL_CALL_LIMIT,
+        exit_behavior="error",
     )
 
-    # 组装图
+    # 组装图：交给 deepagents.create_deep_agent 装配，由它内部自动堆叠
+    # FilesystemMiddleware（提供 ls/read_file/write_file/edit_file/glob/grep/execute
+    # 工具，复用 options.backend）+ SubAgentMiddleware（task 工具 + 默认 GP 子agent）
+    # + SummarizationMiddleware + PatchToolCallsMiddleware 等。
+    #
+    # fs 工具（execute/write_file/edit_file）目前不挂 HITL（interrupt_on=None），
+    # 与切换前一致——切换前 raw_tools 里没有这些工具，平台审批仅作用于 MCP
+    # 工具（_wrap_tool_with_approval）。后续若要给 fs 工具加审批，需要改造
+    # _run_graph 的 interrupt 解析（HumanInTheLoopMiddleware 产出 HITLRequest，
+    # 字段是 action_requests 而非平台的 actionRequests）。
     checkpointer = options.checkpointer
     store = options.long_term_memory.store if options.long_term_memory else None
 
@@ -739,11 +719,14 @@ async def create_deep_agent_runtime(
     if isinstance(store, BaseStore):
         graph_kwargs["store"] = store
 
-    agent = create_agent_graph(
-        model=model_with_limits,
+    agent = create_deep_agent(
+        model=router.primary,
         tools=tools,
         system_prompt=system_prompt,
-        **graph_kwargs,
+        middleware=[router.middleware, model_call_limit],
+        backend=options.backend,
+        checkpointer=graph_kwargs.get("checkpointer"),
+        store=graph_kwargs.get("store"),
     )
 
     config = {

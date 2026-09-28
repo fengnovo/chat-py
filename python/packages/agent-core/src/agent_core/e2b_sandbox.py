@@ -1,6 +1,16 @@
 """E2B 沙箱实现（e2b Python SDK，AsyncSandbox）。
 
 对应 TS 的 E2BSandbox：Sandbox.create / commands.run / files.write。
+
+切换到 deepagents 0.7 后，本类直接继承 `deepagents.backends.sandbox.BaseSandbox`。
+由于 e2b SDK 是 async-only（AsyncSandbox），我们：
+- 实现 sync `execute` / `upload_files` / `download_files` 为 raise RuntimeError
+  （仅用于满足 ABC 抽象契约，运行时不走 sync 路径）
+- override async `aexecute` / `aupload_files` / `adownload_files`，承载真实 async 逻辑
+  （BaseSandbox 默认实现会把 async 调用转成 `asyncio.to_thread(self.execute)`，会命中
+   sync RuntimeError，因此必须 override 这三个 async 方法）
+- BaseSandbox 的 `als/aread/awrite/aedit/agrep/aglob` 默认实现会调 `aexecute`/`aupload_files`/
+  `adownload_files`，因此自动走真实 async 路径，无需额外实现
 """
 
 from __future__ import annotations
@@ -11,14 +21,14 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from .types import (
-    AbortSignal,
-    BaseSandbox,
+from deepagents.backends.protocol import (
     ExecuteResponse,
     FileDownloadResponse,
-    FileOperationError,
     FileUploadResponse,
 )
+from deepagents.backends.sandbox import BaseSandbox
+
+from .types import AbortSignal, FileOperationError
 
 try:  # pragma: no cover - 取决于 e2b SDK 安装
     from e2b import AsyncSandbox as _AsyncSandbox
@@ -123,15 +133,21 @@ class E2BSandbox(BaseSandbox):
     async def set_timeout(self, timeout_ms: int) -> None:
         await self._sandbox.set_timeout(timeout_ms / 1000)
 
-    async def execute(self, command: str) -> ExecuteResponse:
+    def execute(self, command: str, *, timeout: int | None = None) -> ExecuteResponse:
+        """sync execute 不可用：e2b SDK 是 async-only，请走 aexecute。"""
+        raise RuntimeError(
+            "E2BSandbox.execute (sync) 不可用：e2b SDK 仅支持 async 路径，请用 aexecute"
+        )
+
+    async def aexecute(self, command: str, *, timeout: int | None = None) -> ExecuteResponse:
         background = bool(re.search(r"\bnohup\b|&\s*$", command))
         if background:
             await self._sandbox.commands.run(command, background=True, timeout=0)
-            return {
-                "output": f"[background started] {command}",
-                "exitCode": 0,
-                "truncated": False,
-            }
+            return ExecuteResponse(
+                output=f"[background started] {command}",
+                exit_code=0,
+                truncated=False,
+            )
 
         if self._signal is not None:
             self._signal.throw_if_aborted()
@@ -188,45 +204,59 @@ class E2BSandbox(BaseSandbox):
         combined = f"{stdout}\n{stderr}" if stderr else stdout
         encoded = combined.encode("utf-8")
         if len(encoded) <= MAX_OUTPUT_BYTES:
-            return {"output": combined, "exitCode": exit_code, "truncated": False}
-        return {
-            "output": encoded[:MAX_OUTPUT_BYTES].decode("utf-8", errors="ignore"),
-            "exitCode": exit_code,
-            "truncated": True,
-        }
+            return ExecuteResponse(output=combined, exit_code=exit_code, truncated=False)
+        return ExecuteResponse(
+            output=encoded[:MAX_OUTPUT_BYTES].decode("utf-8", errors="ignore"),
+            exit_code=exit_code,
+            truncated=True,
+        )
 
-    async def upload_files(self, files: list[tuple[str, bytes]]) -> list[FileUploadResponse]:
+    def upload_files(self, files: list[tuple[str, bytes]]) -> list[FileUploadResponse]:
+        """sync upload_files 不可用：e2b SDK 仅支持 async 路径，请用 aupload_files。"""
+        raise RuntimeError(
+            "E2BSandbox.upload_files (sync) 不可用：e2b SDK 仅支持 async 路径，请用 aupload_files"
+        )
+
+    async def aupload_files(self, files: list[tuple[str, bytes]]) -> list[FileUploadResponse]:
         results: list[FileUploadResponse] = []
         for file_path, content in files:
             try:
                 await self._sandbox.files.write(file_path, bytes(content))
-                results.append({"path": file_path, "error": None})
+                results.append(FileUploadResponse(path=file_path, error=None))
             except Exception as error:
                 results.append(
-                    {
-                        "path": file_path,
-                        "error": _classify_file_error(
+                    FileUploadResponse(
+                        path=file_path,
+                        error=_classify_file_error(
                             str(error) if isinstance(error, BaseException) else str(error)
                         ),
-                    }
+                    )
                 )
         return results
 
-    async def download_files(self, paths: list[str]) -> list[FileDownloadResponse]:
+    def download_files(self, paths: list[str]) -> list[FileDownloadResponse]:
+        """sync download_files 不可用：e2b SDK 仅支持 async 路径，请用 adownload_files。"""
+        raise RuntimeError(
+            "E2BSandbox.download_files (sync) 不可用：e2b SDK 仅支持 async 路径，请用 adownload_files"
+        )
+
+    async def adownload_files(self, paths: list[str]) -> list[FileDownloadResponse]:
         results: list[FileDownloadResponse] = []
         for file_path in paths:
             try:
                 content = await self._sandbox.files.read(file_path, format="bytes")
-                results.append({"path": file_path, "content": bytes(content), "error": None})
+                results.append(
+                    FileDownloadResponse(path=file_path, content=bytes(content), error=None)
+                )
             except Exception as error:
                 results.append(
-                    {
-                        "path": file_path,
-                        "content": None,
-                        "error": _classify_file_error(
+                    FileDownloadResponse(
+                        path=file_path,
+                        content=None,
+                        error=_classify_file_error(
                             str(error) if isinstance(error, BaseException) else str(error)
                         ),
-                    }
+                    )
                 )
         return results
 
