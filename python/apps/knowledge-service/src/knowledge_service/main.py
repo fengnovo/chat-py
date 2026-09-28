@@ -19,7 +19,7 @@ import uvicorn
 from qdrant_client import AsyncQdrantClient
 
 from artifacts import ArtifactStoreConfig, S3ArtifactStore
-from db import KnowledgeRepository
+from db import KnowledgeRepository, create_pg_pool
 from observability import load_observability_config, redact_telemetry_value, start_observability
 
 from .caption_provider import create_null_captioner, create_openai_compatible_captioner
@@ -56,7 +56,7 @@ async def main() -> None:
     config = load_config()
 
     # ── Postgres ─────────────────────────────────────────────────────────
-    pool = await asyncpg.create_pool(dsn=config.postgres_url, min_size=1, max_size=8)
+    pool = await create_pg_pool(dsn=config.postgres_url, min_size=1, max_size=8)
     await pool.fetchval("SELECT 1")
     logger.info("postgres connected", operation="knowledge.startup")
 

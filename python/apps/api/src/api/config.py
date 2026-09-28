@@ -71,7 +71,7 @@ class ApiConfig(BaseSettings):
     # Core
     NODE_ENV: Literal["development", "test", "production"] = "development"
     API_HOST: str = "127.0.0.1"
-    API_PORT: int = 8000
+    API_PORT: int = 8003
     API_VERSION: str = "0.1.0"
     TRUST_PROXY_CIDRS: str = DEFAULT_TRUST_PROXY_CIDRS
     WEB_ORIGIN: str = "http://localhost:3000"
@@ -251,10 +251,8 @@ class ApiConfig(BaseSettings):
         if not root:
             root = str(REPOSITORY_ROOT / "data" / "sandboxes")
         p = Path(root)
-        if p.is_absolute():
-            return str(p.resolve())
-        worker_root = REPOSITORY_ROOT / "apps" / "worker"
-        return str((worker_root / p).resolve())
+        # 相对路径按仓库根解析（与 worker 的 mcp_config_path 基准一致）
+        return str(p if p.is_absolute() else (REPOSITORY_ROOT / p).resolve())
 
     @property
     def oauth(self) -> OAuthConfig:
@@ -273,7 +271,8 @@ class ApiConfig(BaseSettings):
 
     @property
     def workspace_root(self) -> str:
-        return str(Path(self.WORKSPACE_ROOT).resolve())
+        p = Path(self.WORKSPACE_ROOT)
+        return str(p if p.is_absolute() else (REPOSITORY_ROOT / p).resolve())
 
 
 def load_config(env: dict[str, str] | None = None) -> ApiConfig:

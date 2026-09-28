@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import uuid
 from datetime import datetime
 from typing import Any
@@ -10,6 +9,7 @@ from typing import Any
 import asyncpg
 from contracts import AuthContext
 
+from ._json import json_dumps
 from .errors import ForbiddenKnowledgeError
 
 _MAX_CITATIONS = 50
@@ -554,7 +554,7 @@ class KnowledgeRepository:
                        RETURNING *""",
                     auth.tenant_id, kb_id, id,
                     input["size_bytes"], input["sha256"],
-                    json.dumps(input["metadata"]) if input.get("metadata") else None,
+                    json_dumps(input["metadata"]) if input.get("metadata") else None,
                 )
                 await conn.execute("COMMIT")
                 return {"asset": dict(updated)}
@@ -722,7 +722,7 @@ class KnowledgeRepository:
                 chunk["ordinal"], chunk["text"],
                 chunk.get("token_count", len(chunk["text"])),
                 chunk.get("heading"),
-                json.dumps(chunk.get("metadata", {})),
+                json_dumps(chunk.get("metadata", {})),
                 chunk.get("vector_point_id", chunk.get("id", uuid.uuid4())),
             )
 
@@ -738,7 +738,7 @@ class KnowledgeRepository:
             input["session_id"], input["run_id"], input["kb_ids"],
             input["query"], input["top_k"], input["max_hops"],
             input["result_count"], input["rerank_status"],
-            json.dumps(citations), input["latency_ms"], input["status"],
+            json_dumps(citations), input["latency_ms"], input["status"],
         )
 
     # ── caption jobs ──────────────────────────────────────────────────

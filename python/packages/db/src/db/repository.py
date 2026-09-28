@@ -5,7 +5,6 @@ All 74 public methods are present and use ``$1, $2`` positional parameters.
 
 from __future__ import annotations
 
-import json
 import uuid
 from datetime import UTC, datetime
 from typing import Any
@@ -21,6 +20,7 @@ from contracts import (
 # ─── Record types (Pydantic) ──────────────────────────────────────────
 from pydantic import BaseModel
 
+from ._json import json_dumps
 from .errors import RepositoryConflictError, RepositoryNotFoundError
 
 
@@ -141,7 +141,8 @@ class DispatchOutboxRecord(BaseModel):
 
 
 class MemoryRecord(BaseModel):
-    id: str
+    # id/时间戳由 DB 在写入时生成；作为 upsert 输入时可省略（空串即"未指定"）。
+    id: str = ""
     tenant_id: str
     user_id: str
     project_id: str | None
@@ -156,10 +157,10 @@ class MemoryRecord(BaseModel):
     source_session_id: str | None
     source_run_id: str | None
     supersedes_id: str | None
-    created_at: str
-    updated_at: str
-    last_accessed_at: str | None
-    metadata: dict[str, Any]
+    created_at: str = ""
+    updated_at: str = ""
+    last_accessed_at: str | None = None
+    metadata: dict[str, Any] = {}
 
 
 class MemoryListInput(BaseModel):
@@ -399,7 +400,7 @@ class AgentRepository:
             input.source_session_id,
             input.source_run_id,
             input.supersedes_id,
-            json.dumps(input.metadata or {}),
+            json_dumps(input.metadata or {}),
         )
         return _memory_of(row)
 
@@ -1170,7 +1171,7 @@ class AgentRepository:
                     """INSERT INTO run_dispatch_outbox (id, tenant_id, run_id, job_kind, payload)
                        VALUES ($1, $2, $3, $4, $5::jsonb)""",
                     outbox_id, context.tenant_id, run_id, "start",
-                    json.dumps(job_payload),
+                    json_dumps(job_payload),
                 )
                 await conn.execute("COMMIT")
                 return {"run": run, "created": True, "outbox_id": outbox_id}
@@ -1194,7 +1195,10 @@ class AgentRepository:
 
     async def get_session_for_worker(self, tenant_id: str, session_id: str) -> SessionRecord | None:
         row = await self._pool.fetchrow(
-            "SELECT * FROM agent_sessions WHERE tenant_id = $1 AND id = $2 AND deleted_at IS NULL",
+            """SELECT s.*, w.path AS workspace_path
+               FROM agent_sessions s
+               JOIN workspaces w ON w.id = s.workspace_id
+               WHERE s.tenant_id = $1 AND s.id = $2 AND s.deleted_at IS NULL""",
             tenant_id, session_id,
         )
         return _session_of(row) if row else None
@@ -1354,7 +1358,7 @@ class AgentRepository:
                VALUES ($1, $2, $3, $4, $5::jsonb)
                ON CONFLICT (run_id, id) DO NOTHING""",
             interrupt["id"], tenant_id, run_id, interrupt["kind"],
-            json.dumps(interrupt["request"]),
+            json_dumps(interrupt["request"]),
         )
 
     async def resolve_interrupt(
@@ -1385,7 +1389,7 @@ class AgentRepository:
                          AND status = 'pending'
                        RETURNING *""",
                     context.tenant_id, run_id, interrupt_id, kind,
-                    json.dumps(response),
+                    json_dumps(response),
                 )
                 if not result:
                     await conn.execute("COMMIT")
@@ -1428,7 +1432,7 @@ class AgentRepository:
                     """INSERT INTO run_dispatch_outbox (id, tenant_id, run_id, job_kind, payload)
                        VALUES ($1, $2, $3, $4, $5::jsonb)""",
                     outbox_id, context.tenant_id, run_id,
-                    job_payload["kind"], json.dumps(job_payload),
+                    job_payload["kind"], json_dumps(job_payload),
                 )
                 await conn.execute("COMMIT")
                 return InterruptRecord(
@@ -1491,7 +1495,7 @@ class AgentRepository:
                 await conn.execute(
                     """INSERT INTO run_events (run_id, tenant_id, seq, event_type, payload)
                        VALUES ($1, $2, $3, 'run.cancelled', $4::jsonb)""",
-                    run_id, context.tenant_id, seq, json.dumps(event),
+                    run_id, context.tenant_id, seq, json_dumps(event),
                 )
                 await conn.execute(
                     """UPDATE interrupts

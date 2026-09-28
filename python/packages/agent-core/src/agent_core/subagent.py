@@ -25,7 +25,7 @@ from datetime import datetime, timezone
 from typing import Any, Literal
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
-from langchain_core.tools import tool
+from langchain_core.tools import StructuredTool
 from pydantic import BaseModel, Field
 
 from .model_router import AgentMiddleware, ModelRouter, _override_request
@@ -924,8 +924,8 @@ def create_spawn_subagent_tool(
             )
         return await loop_fn(options, input_data, config)
 
-    return tool(
-        "spawn_subagent",
+    return StructuredTool.from_function(
+        name="spawn_subagent",
         args_schema=SpawnSubagentInput,
         description=_SPAWN_TOOL_DESCRIPTION,
         coroutine=_impl,

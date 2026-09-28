@@ -110,28 +110,25 @@ class RunOutboxDispatcher:
 
     async def _publish_dispatch(self, dispatch: Any) -> None:
         try:
-            job_data = dispatch.payload if hasattr(dispatch, "payload") else dispatch.get("payload", {})
+            job_data = dispatch.job
             # Parse as RunJob to validate
             job = self._parse_run_job(job_data)
             await self._queue.enqueue_job(
                 job.kind,
                 job_data,
-                _job_id=dispatch.id if hasattr(dispatch, "id") else dispatch.get("id"),
+                _job_id=dispatch.id,
             )
-            dispatch_id = dispatch.id if hasattr(dispatch, "id") else dispatch.get("id")
-            await self._repository.mark_dispatch_published(dispatch_id)
+            await self._repository.mark_dispatch_published(dispatch.id)
         except Exception as e:
-            dispatch_id = dispatch.id if hasattr(dispatch, "id") else dispatch.get("id")
-            attempts = dispatch.attempts if hasattr(dispatch, "attempts") else dispatch.get("attempts", 1)
-            retry_delay_ms = min(30_000, int(250 * math.pow(2, min(attempts - 1, 7))))
+            retry_delay_ms = min(30_000, int(250 * math.pow(2, min(dispatch.attempts - 1, 7))))
             await self._repository.reschedule_dispatch(
-                dispatch_id,
+                dispatch.id,
                 str(e),
                 retry_delay_ms,
             )
             logger.warning(
                 "outbox dispatch will be retried: dispatch_id=%s, error=%s, retry_delay_ms=%d",
-                dispatch_id, e, retry_delay_ms,
+                dispatch.id, e, retry_delay_ms,
             )
 
     def _parse_run_job(self, data: dict[str, Any]) -> RunJob:

@@ -40,7 +40,7 @@ class KnowledgeServiceConfig(BaseSettings):
 
     # ── 服务监听 ────────────────────────────────────────────────────────
     host: str = Field(default="127.0.0.1", alias="KNOWLEDGE_SERVICE_HOST")
-    port: int = Field(default=8090, gt=0, alias="KNOWLEDGE_SERVICE_PORT")
+    port: int = Field(default=8091, gt=0, alias="KNOWLEDGE_SERVICE_PORT")
 
     # ── 基础设施 ────────────────────────────────────────────────────────
     redis_url: str = Field(default="redis://127.0.0.1:6379", alias="REDIS_URL")

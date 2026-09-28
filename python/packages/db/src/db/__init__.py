@@ -25,6 +25,7 @@ from .knowledge_repository import (
 )
 from .migrate import migrate_database
 from .password import hash_password, verify_password
+from .pg import create_pg_pool
 from .repository import (
     AgentRepository,
     ArtifactRecord,
@@ -81,7 +82,7 @@ class DatabaseHandle:
 
 async def create_database(connection_string: str) -> DatabaseHandle:
     """Create an asyncpg pool and AgentRepository — mirrors createDatabase()."""
-    pool = await asyncpg.create_pool(dsn=connection_string, max_size=20)
+    pool = await create_pg_pool(dsn=connection_string, max_size=20)
     return DatabaseHandle(pool=pool, repository=AgentRepository(pool))
 
 
@@ -134,6 +135,7 @@ __all__ = [
     "Workspace",
     "WorkspaceSandboxRecord",
     "create_database",
+    "create_pg_pool",
     "hash_password",
     "migrate_database",
     "verify_password",

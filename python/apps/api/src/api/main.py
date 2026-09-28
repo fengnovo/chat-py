@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 import redis.asyncio as redis
+from arq.connections import RedisSettings, create_pool as arq_create_pool
 from artifacts import ArtifactStoreConfig, S3ArtifactStore
 from contracts import AuthContext
 from fastapi import FastAPI, Request, Response
@@ -49,10 +50,14 @@ class RedisPublisher:
 
 
 class ArqQueueWrapper:
-    """Thin wrapper around arq Redis for enqueue."""
+    """arq 入队封装：共享一个 ArqRedis 连接池，按 queue_name 投递到不同队列。
 
-    def __init__(self, redis_pool: redis.Redis, name: str) -> None:
-        self._redis = redis_pool
+    name=None 时投到 arq 默认队列（``arq:queue``），agent worker 消费；
+    knowledge-index / knowledge-caption 由 knowledge-service 自己的 worker 消费。
+    """
+
+    def __init__(self, arq_redis: Any, name: str | None = None) -> None:
+        self._redis = arq_redis
         self.name = name
 
     async def enqueue_job(
@@ -62,11 +67,15 @@ class ArqQueueWrapper:
         _job_id: str | None = None,
         **kwargs: Any,
     ) -> Any:
-        import json
-        payload = json.dumps({"function": function, "args": args, "kwargs": kwargs})
-        job_id = _job_id or f"{function}:{time.time()}"
-        await self._redis.xadd(self.name, {"payload": payload, "job_id": job_id})
-        return {"job_id": job_id}
+        extra: dict[str, Any] = {}
+        if self.name:
+            extra["_queue_name"] = self.name
+        return await self._redis.enqueue_job(
+            function, *args, _job_id=_job_id, **extra, **kwargs
+        )
+
+    async def close(self) -> None:
+        await self._redis.close(close_connection_pool=True)
 
 
 async def setup_app(config: ApiConfig) -> FastAPI:
@@ -99,11 +108,14 @@ async def setup_app(config: ApiConfig) -> FastAPI:
     publisher = RedisPublisher(redis.Redis.from_url(config.REDIS_URL, decode_responses=True))
     queue_redis = redis.Redis.from_url(config.REDIS_URL, decode_responses=True)
 
-    # ── Queues ─────────────────────────────────────────────────────────────
-    run_queue = ArqQueueWrapper(queue_redis, "agent-runs")
-    knowledge_queue = ArqQueueWrapper(queue_redis, "knowledge-index")
-    memory_index_queue = ArqQueueWrapper(queue_redis, "agent-memory-index")
-    caption_queue = ArqQueueWrapper(queue_redis, "knowledge-caption") if config.caption_enabled else None
+    # ── Queues（arq）───────────────────────────────────────────────────────
+    # run / memory-index 都投到 arq 默认队列，由 agent worker 消费；
+    # knowledge-* 投到 knowledge-service 的专用队列。
+    arq_redis = await arq_create_pool(RedisSettings.from_dsn(config.REDIS_URL))
+    run_queue = ArqQueueWrapper(arq_redis, None)
+    knowledge_queue = ArqQueueWrapper(arq_redis, "knowledge-index")
+    memory_index_queue = ArqQueueWrapper(arq_redis, None)
+    caption_queue = ArqQueueWrapper(arq_redis, "knowledge-caption") if config.caption_enabled else None
 
     # ── Artifacts ──────────────────────────────────────────────────────────
     artifacts = S3ArtifactStore(ArtifactStoreConfig(
@@ -139,6 +151,8 @@ async def setup_app(config: ApiConfig) -> FastAPI:
         yield
         await outbox.stop()
         await stream_subscriptions.close_all()
+        await run_queue.close()
+        await queue_redis.aclose()
         await database.repository.close()
         await runtime.shutdown()
 

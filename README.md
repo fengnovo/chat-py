@@ -246,9 +246,9 @@ pnpm dev
 
 访问：
 
-- Web：<http://localhost:3020>（或 `.env` 中 `PORT` 指定的端口）
-- API 存活检查：<http://127.0.0.1:8002/health/live>
-- API 就绪检查：<http://127.0.0.1:8002/health/ready>
+- Web：<http://localhost:3021>（或 `.env` 中 `PORT` 指定的端口）
+- API 存活检查：<http://127.0.0.1:8003/health/live>
+- API 就绪检查：<http://127.0.0.1:8003/health/ready>
 - MinIO Console：<http://127.0.0.1:59001>
 
 ### Electron 桌面客户端

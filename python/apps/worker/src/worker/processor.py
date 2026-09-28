@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import gzip
+import logging
 import time
 import uuid
 from typing import Any
@@ -23,7 +24,7 @@ from contracts import (
     RunJob,
     run_events_channel,
 )
-from db import AgentRepository
+from db import AgentRepository, MemoryJobInput
 
 from .agent_telemetry import AgentTelemetry
 from .config import WorkerConfig
@@ -42,10 +43,14 @@ from .workspace import (
 
 
 _run_job_adapter: TypeAdapter[RunJob] = TypeAdapter(RunJob)
+_agent_event_adapter: TypeAdapter[AgentEvent] = TypeAdapter(AgentEvent)
 
 
 def metric_job_kind(kind: str) -> str:
     return "run" if kind == "start" else "resume"
+
+
+logger = logging.getLogger("worker.processor")
 
 
 def resolve_worker_mcp_config_path(
@@ -88,7 +93,7 @@ async def persist_event(
     validated = event
     persisted = await repository.append_event(str(job.tenant_id), validated)
     await publisher.publish(
-        run_events_channel(str(job.run_id)), str(persisted.seq)
+        run_events_channel(str(job.run_id)), str(persisted["seq"])
     )
     if event.type == "approval.required":
         await repository.create_interrupt(str(job.tenant_id), str(job.run_id), {
@@ -111,12 +116,12 @@ async def persist_event(
             str(job.tenant_id), str(job.run_id), status, error
         )
         if status == "completed":
-            await repository.enqueue_memory_job({
-                "tenant_id": str(job.tenant_id),
-                "user_id": str(job.user_id),
-                "session_id": str(job.session_id),
-                "run_id": str(job.run_id),
-            })
+            await repository.enqueue_memory_job(MemoryJobInput(
+                tenant_id=str(job.tenant_id),
+                user_id=str(job.user_id),
+                session_id=str(job.session_id),
+                run_id=str(job.run_id),
+            ))
             try:
                 await memory_queue.enqueue_job(
                     "extract",
@@ -165,7 +170,7 @@ async def acquire_sandbox(
     services: dict[str, Any],
     job: RunJob,
     workspace: dict[str, Any],
-    signal: asyncio.Event,
+    signal: AbortSignal,
 ) -> Any:
     config: WorkerConfig = services["config"]
     cached = _get_cached_sandbox(workspace["workspace_id"], config.E2B_TIMEOUT_MS or 600_000)
@@ -176,35 +181,39 @@ async def acquire_sandbox(
 
     sandbox = None
     if config.SANDBOX_RUNTIME == "docker":
-        # 动态导入 agent-core，避免未迁移时硬失败
         try:
-            from agent_core import DockerSandboxBackend  # type: ignore[import-not-found]
-            sandbox = await DockerSandboxBackend.create(
+            from agent_core import DockerSandboxBackend, DockerSandboxOptions
+
+            options = DockerSandboxOptions(
                 session_id=workspace["workspace_id"],
                 root_directory=config.DOCKER_SANDBOX_SESSIONS_ROOT,
                 image=config.DOCKER_SANDBOX_IMAGE,
                 command_timeout_ms=config.DOCKER_SANDBOX_COMMAND_TIMEOUT_MS,
             )
+            sandbox = await DockerSandboxBackend.create(options)
         except Exception:
+            logger.exception("docker sandbox acquire failed")
             sandbox = None
     else:
         api_key = config.E2B_API_KEY
         if not api_key:
             raise RuntimeError("E2B_API_KEY is required for e2b-cloud")
         try:
-            from agent_core import E2BSandbox  # type: ignore[import-not-found]
-            sandbox_options = {
-                "api_key": api_key,
+            from agent_core import E2BSandbox, E2BSandboxOptions
+
+            sandbox_options = E2BSandboxOptions(
+                api_key=api_key,
                 **({"api_url": config.E2B_API_URL} if config.E2B_API_URL else {}),
                 **({"sandbox_url": config.E2B_SANDBOX_URL} if config.E2B_SANDBOX_URL else {}),
-                "template": config.E2B_TEMPLATE,
-                "timeout_ms": config.E2B_TIMEOUT_MS,
-                "signal": signal,
-            }
+                template=config.E2B_TEMPLATE,
+                timeout_ms=config.E2B_TIMEOUT_MS,
+                signal=signal,
+            )
             if workspace.get("sandbox_id"):
                 try:
                     sandbox = await E2BSandbox.connect(workspace["sandbox_id"], sandbox_options)
                 except Exception:
+                    logger.warning("stale e2b sandbox id, creating new one", exc_info=True)
                     await services["repository"].clear_workspace_sandbox_id(
                         str(job.tenant_id),
                         workspace["workspace_id"],
@@ -230,6 +239,7 @@ async def acquire_sandbox(
                     await sandbox.kill()
                     raise RuntimeError("Workspace sandbox identity changed concurrently")
         except Exception:
+            logger.exception("e2b sandbox acquire failed")
             sandbox = None
 
     if sandbox is None:
@@ -278,11 +288,30 @@ async def build_long_term_memory(
             # 待 agent-core 提供 writeLongTermMemoryProfile 后写入 store
             pass
 
+        # 把语义召回结果渲染成 context；deep_agent 会以 <long_term_memory>
+        # 注入系统提示（store/remember 工具可选，缺失也不影响只读召回）。
+        context_lines: list[str] = []
+        for record in records:
+            content = (
+                record.get("content", "")
+                if isinstance(record, dict)
+                else getattr(record, "content", "")
+            )
+            if not content:
+                continue
+            kind = (
+                record.get("kind", "")
+                if isinstance(record, dict)
+                else getattr(record, "kind", "")
+            )
+            context_lines.append(f"- [{kind}] {content}" if kind else f"- {content}")
+        context = "\n".join(context_lines)
+
         return {
             "store": memory_store,
             "namespace": {"tenantId": str(job.tenant_id), "userId": str(job.user_id), "assistantKey": assistant_key, "scope": scope},
             "records": records,
-            "context": "",
+            "context": context,
         }
     except Exception:
         if metrics := services.get("memory_metrics"):
@@ -300,7 +329,7 @@ async def create_runtime(
     job: RunJob,
     workspace_path: str,
     backend: Any,
-    signal: asyncio.Event,
+    signal: AbortSignal,
     agent_telemetry: AgentTelemetry | None = None,
     callbacks: list[Any] | None = None,
     agent_resources: AgentResources | None = None,
@@ -322,15 +351,48 @@ async def create_runtime(
     mcp_config_path = resolve_worker_mcp_config_path(config.MCP_CONFIG_PATH)
 
     try:
-        from agent_core import create_deep_agent_runtime  # type: ignore[import-not-found]
-        runtime = await create_deep_agent_runtime(
+        from agent_core import (
+            HeadlessAgentOptions,
+            KnowledgeMcpOptions,
+            LongTermMemoryOptions,
+            ModelSpec,
+            SummarizationConfig,
+            create_deep_agent_runtime,
+        )
+
+        ltm_options = None
+        # store 可选：没有 store/remember 回调时，仍可通过 context 做只读记忆注入。
+        if long_term_memory and (
+            long_term_memory.get("store") or long_term_memory.get("context")
+        ):
+            ltm_options = LongTermMemoryOptions(
+                store=long_term_memory.get("store"),
+                namespace=[
+                    "memory",
+                    str(job.tenant_id),
+                    str(job.user_id),
+                ],
+                context=long_term_memory.get("context") or None,
+            )
+
+        options = HeadlessAgentOptions(
             run_id=str(job.run_id),
             session_id=str(job.session_id),
             workspace_path=workspace_path,
             backend=backend,
             backend_mode="docker" if config.SANDBOX_RUNTIME == "docker" else "e2b",
             checkpointer=services.get("checkpointer"),
-            models=config.models,
+            models=[
+                ModelSpec(
+                    id=m.id,
+                    model=m.model,
+                    provider=m.provider,
+                    apiKey=m.api_key,
+                    baseUrl=m.base_url,
+                    maxTokens=m.max_tokens,
+                )
+                for m in config.models
+            ],
             circuit_breaker=RedisCircuitBreakerStore(
                 services["redis"],
                 str(job.tenant_id),
@@ -343,24 +405,26 @@ async def create_runtime(
             model_call_limit=config.AGENT_MODEL_CALL_LIMIT,
             signal=signal,
             mcp_config_path=mcp_config_path,
-            knowledge_mcp={
-                "url": config.KNOWLEDGE_MCP_URL or "",
-                "token": knowledge_token,
-                "timeout_ms": config.KNOWLEDGE_MCP_TIMEOUT_MS,
-                "enabled": knowledge_mcp_enabled,
-            },
+            knowledge_mcp=KnowledgeMcpOptions(
+                url=config.KNOWLEDGE_MCP_URL or "",
+                token=knowledge_token,
+                timeout_ms=config.KNOWLEDGE_MCP_TIMEOUT_MS,
+                enabled=knowledge_mcp_enabled,
+            ),
             memory=agent_resources.memory if agent_resources and agent_resources.memory else None,
             skills=agent_resources.skills if agent_resources and agent_resources.skills else None,
-            long_term_memory=long_term_memory,
-            summarization={
-                "trigger_tokens": config.AGENT_SUMMARIZATION_TRIGGER_TOKENS,
-                "keep_tokens": config.AGENT_SUMMARIZATION_KEEP_TOKENS,
-                "truncate_args_tokens": 40_000,
-            },
+            long_term_memory=ltm_options,
+            summarization=SummarizationConfig(
+                trigger_tokens=config.AGENT_SUMMARIZATION_TRIGGER_TOKENS,
+                keep_tokens=config.AGENT_SUMMARIZATION_KEEP_TOKENS,
+                truncate_args_tokens=40_000,
+            ),
         )
+        runtime = await create_deep_agent_runtime(options)
         return runtime
     except Exception:
-        return None
+        logger.exception("agent runtime creation failed")
+        raise
 
 
 async def create_knowledge_run_token(job: RunJob, secret: str) -> str:
@@ -502,7 +566,7 @@ def create_run_processor(
         repository: AgentRepository = services["repository"]
         redis = services["redis"]
         publisher = services["publisher"]
-        controllers: dict[str, asyncio.Event] = services["controllers"]
+        controllers: dict[str, AbortController] = services["controllers"]
 
         producer_context = job.observability or {}
         # arq 将 job_id / enqueue_time 注入 ctx 而非 kwargs
@@ -546,7 +610,8 @@ def create_run_processor(
 
         try:
             if span:
-                ctx_token = trace.set_span_in_context(span)
+                from opentelemetry import context as otel_context
+                ctx_token = otel_context.attach(trace.set_span_in_context(span))
             else:
                 ctx_token = None
             try:
@@ -599,7 +664,7 @@ async def _process_run_inner(
     langfuse: WorkerLangfuse | None,
     agent_telemetry: AgentTelemetry | None,
     repository: AgentRepository,
-    controllers: dict[str, asyncio.Event],
+    controllers: dict[str, AbortController],
     observed: Any,
     span: Any,
 ) -> None:
@@ -622,7 +687,9 @@ async def _process_run_inner(
     claimed = await repository.try_mark_run_running(str(job.tenant_id), str(job.run_id))
     if not claimed:
         return
-    controller = asyncio.Event()
+    from agent_core import AbortController
+
+    controller = AbortController()
     controllers[str(job.run_id)] = controller
     runtime = None
     sandbox = None
@@ -640,7 +707,7 @@ async def _process_run_inner(
             services, job, {
                 "workspace_id": workspace.workspace_id,
                 "sandbox_id": workspace.sandbox_id,
-            }, controller,
+            }, controller.signal,
         ))
         sandbox = acquired_sandbox
         config: WorkerConfig = services["config"]
@@ -696,7 +763,7 @@ async def _process_run_inner(
             })))
 
         runtime = await observed("agent.runtime.create", lambda: create_runtime(
-            services, job, remote_path, acquired_sandbox, controller,
+            services, job, remote_path, acquired_sandbox, controller.signal,
             agent_telemetry, langchain_callbacks, agent_resources, long_term_memory,
         ))
 
@@ -710,15 +777,17 @@ async def _process_run_inner(
         else:
             print(f"[processor] run={job.run_id} kbIds={job.knowledge_base_ids} mcp={runtime.mcp_status if runtime else 'unknown'}")
 
-        await observed("agent.execute", lambda: _execute_agent_events(
-            services, job, runtime, prepared_attachments, controller,
-            terminal_event_written, should_kill,
-        ))
+        terminal_event_written, should_kill = await observed(
+            "agent.execute",
+            lambda: _execute_agent_events(
+                services, job, runtime, prepared_attachments, controller
+            ),
+        )
     except Exception as error:
-        should_kill = controller.is_set() or not terminal_event_written
+        should_kill = controller.signal.aborted or not terminal_event_written
         if not terminal_event_written:
             latest = await repository.get_run_for_worker(str(job.tenant_id), str(job.run_id))
-            cancelled = controller.is_set() or (latest and latest.cancel_requested_at)
+            cancelled = controller.signal.aborted or (latest and latest.cancel_requested_at)
             if cancelled:
                 event = RunCancelledEvent(
                     run_id=job.run_id,
@@ -736,7 +805,7 @@ async def _process_run_inner(
                     message=str(error) if isinstance(error, Exception) else repr(error),
                 )
             await persist_event(services, job, event)
-        if not controller.is_set():
+        if not controller.signal.aborted:
             raise
     finally:
         controllers.pop(str(job.run_id), None)
@@ -752,10 +821,12 @@ async def _execute_agent_events(
     job: RunJob,
     runtime: Any,
     prepared_attachments: dict[str, Any],
-    controller: asyncio.Event,
-    terminal_event_written: bool,
-    should_kill: bool,
-) -> None:
+    controller: AbortController,
+) -> tuple[bool, bool]:
+    # 终态标志必须返回给调用方（Python bool 按值传递，形参修改带不出去，
+    # 否则完成后清理阶段会误判"没写终态"而补写一条 run.failed）。
+    terminal_event_written = False
+    should_kill = False
     if job.kind == "start":
         events = runtime.run(
             job.message + prepared_attachments["appended_message"],
@@ -776,7 +847,12 @@ async def _execute_agent_events(
             },
         })
 
-    async for event in events:
+    async for raw_event in events:
+        event = (
+            raw_event
+            if isinstance(raw_event, AgentEvent)
+            else _agent_event_adapter.validate_python(raw_event)
+        )
         persist_outcome = "success"
         persist_started_at = time.monotonic()
         try:
@@ -791,6 +867,8 @@ async def _execute_agent_events(
             should_kill = True
         if event.type == "run.failed" and event.code != "AGENT_STEP_LIMIT":
             should_kill = True
+
+    return terminal_event_written, should_kill
 
 
 async def _cleanup_sandbox(

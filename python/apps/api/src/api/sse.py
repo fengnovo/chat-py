@@ -121,6 +121,9 @@ def chunks_from_events(run_id: str, events: list[dict[str, Any]]) -> list[dict[s
                 "finishReason": "stop" if event_type == "run.completed" else "error",
             })
             finished = True
+            # 终态即为最后事件；后续残留（异常情况下的重复终态）不再拼接，
+            # 避免 data-agent 出现在 finish 之后导致前端状态错乱。
+            break
 
     return chunks
 
@@ -182,12 +185,12 @@ async def stream_agent_events(
                     if not events:
                         break
                     for event in events:
-                        if event.seq <= cursor:
+                        if event["seq"] <= cursor:
                             continue
-                        cursor = event.seq
+                        cursor = event["seq"]
                         if telemetry:
                             telemetry.first_byte()
-                        queue.put_nowait(sse_frame(event.model_dump(by_alias=True)))
+                        queue.put_nowait(sse_frame(event))
                     if len(events) < 500:
                         break
                 latest = await repository.get_run(auth, run_id)
@@ -213,7 +216,10 @@ async def stream_agent_events(
             # Initial flush
             await coalesced_flush()
 
-            while not closed:
+            # 注意：循环条件不能用 not closed——flush 入队终态帧后会立即置 closed
+            # 并入队 None 哨兵，若按 closed 判断会在吐出前几帧后提前退出，丢失
+            # text-end/finish。这里始终靠 None 哨兵结束，确保队列排空。
+            while True:
                 try:
                     item = await asyncio.wait_for(queue.get(), timeout=HEARTBEAT_INTERVAL_S)
                 except asyncio.TimeoutError:
@@ -255,7 +261,7 @@ async def stream_workflow_run(
 
     telemetry = observability.start_sse("chat") if observability else None
     initial_events = await repository.list_events(auth, run_id, 0, 100_000)
-    initial_chunks = chunks_from_events(run_id, [e.model_dump(by_alias=True) for e in initial_events])
+    initial_chunks = chunks_from_events(run_id, initial_events)
     chunk_cursor = requested_start(request, len(initial_chunks))
     closed = False
     unsubscribe: Callable[[], None] | None = None
@@ -283,7 +289,7 @@ async def stream_workflow_run(
                 events = await repository.list_events(auth, run_id, 0, 100_000)
                 if closed:
                     return True
-                chunks = chunks_from_events(run_id, [e.model_dump(by_alias=True) for e in events])
+                chunks = chunks_from_events(run_id, events)
                 for chunk in chunks[chunk_cursor:]:
                     if telemetry:
                         telemetry.first_byte()
@@ -311,7 +317,9 @@ async def stream_workflow_run(
             # Initial flush
             await coalesced_flush()
 
-            while not closed:
+            # 同 stream_agent_events：靠 None 哨兵结束而非 closed 标志，保证
+            # 终态批（data-agent/text-end/finish）完整吐出后再关流。
+            while True:
                 try:
                     item = await asyncio.wait_for(queue.get(), timeout=HEARTBEAT_INTERVAL_S)
                 except asyncio.TimeoutError:

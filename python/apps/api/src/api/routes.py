@@ -538,10 +538,10 @@ async def create_run(
             **({"observability_context": enqueue.get_context()} if enqueue else {}),
         })
         if enqueue:
-            enqueue.finish(run_id=str(result.run.id), outbox_id=result.outbox_id, created=result.created)
-        if result.created:
+            enqueue.finish(run_id=str(result["run"].id), outbox_id=result.get("outbox_id"), created=result["created"])
+        if result["created"]:
             outbox.wake()
-        return result.run
+        return result["run"]
     except Exception as e:
         if enqueue:
             enqueue.finish(created=False, error=e)
@@ -1012,7 +1012,7 @@ async def chat(
                 "session_id": str(session.id),
                 "message": message.strip(),
                 "knowledge_base_ids": kb_ids,
-                "attachments": [a.model_dump() for a in attachment_refs],
+                "attachments": [a.model_dump(by_alias=True, mode="json") for a in attachment_refs],
                 "continuation": input.continuation,
                 **({"observability_context": enqueue.get_context()} if enqueue else {}),
             })
@@ -1022,11 +1022,11 @@ async def chat(
             raise
 
         if enqueue:
-            enqueue.finish(run_id=str(result.run.id), outbox_id=result.outbox_id, created=result.created)
-        if result.created:
+            enqueue.finish(run_id=str(result["run"].id), outbox_id=result.get("outbox_id"), created=result["created"])
+        if result["created"]:
             outbox.wake()
         return await stream_workflow_run(
-            request, str(result.run.id),
+            request, str(result["run"].id),
             repository, auth,
             request.app.state.stream_subscriptions,
             observability,

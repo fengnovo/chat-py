@@ -10,7 +10,7 @@
 #   bash scripts/fault-injection-observability.sh --all
 #
 # 可选环境变量：
-#   API_BASE             默认 http://127.0.0.1:${API_PORT:-8002}
+#   API_BASE             默认 http://127.0.0.1:${API_PORT:-8003}
 #   DWELL_SECS           故障持续观察窗口，默认 20
 #   APP_SMOKE_CMD        故障期间额外执行业务路径的命令（返回 0 视为业务未受影响）
 #   OBS_PROJECT_PREFIX   观测栈容器前缀，默认 chat-observability
@@ -23,7 +23,7 @@
 
 set -uo pipefail
 
-API_BASE="${API_BASE:-http://127.0.0.1:${API_PORT:-8002}}"
+API_BASE="${API_BASE:-http://127.0.0.1:${API_PORT:-8003}}"
 DWELL_SECS="${DWELL_SECS:-20}"
 OBS="${OBS_PROJECT_PREFIX:-chat-observability}"
 PG_CTR="${POSTGRES_CONTAINER:-chat-infra-postgres-1}"

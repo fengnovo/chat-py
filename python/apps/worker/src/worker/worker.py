@@ -16,6 +16,7 @@ from arq import cron
 from arq.connections import RedisSettings, create_pool
 from arq.worker import Worker, func
 
+from agent_core import AbortController
 from db import create_database, migrate_database
 from observability import start_observability
 
@@ -26,8 +27,8 @@ from .memory_index import MemoryIndexConfig, create_memory_indexer
 from .observability import create_worker_observability
 from .processor import create_run_processor
 
-# 全局取消控制器：run_id -> asyncio.Event
-_controllers: dict[str, asyncio.Event] = {}
+# 全局取消控制器：run_id -> AbortController（agent_core 统一的取消令牌）
+_controllers: dict[str, AbortController] = {}
 
 # 全局服务容器
 _services: dict[str, Any] = {}
@@ -43,7 +44,7 @@ async def _cancellation_listener(publisher: Any) -> None:
                 channel = message["channel"]
                 run_id = channel.replace("agent:run:", "").replace(":cancel", "")
                 if run_id in _controllers:
-                    _controllers[run_id].set()
+                    _controllers[run_id].abort()
     except asyncio.CancelledError:
         pass
     finally:
@@ -61,32 +62,38 @@ async def _run_job(ctx: dict[str, Any], *args: Any, **kwargs: Any) -> None:
     await processor(ctx, *args, **kwargs)
 
 
-async def _memory_index_upsert(ctx: dict[str, Any], **kwargs: Any) -> None:
+async def _memory_index_upsert(ctx: dict[str, Any], *args: Any, **kwargs: Any) -> None:
     """arq 任务：写入记忆索引。"""
     indexer = ctx.get("memory_indexer")
     if not indexer:
         return
-    memory = kwargs.get("memory", {})
+    memory: dict[str, Any] = dict(kwargs)
+    if args and isinstance(args[0], dict):
+        memory = args[0]
+    payload = memory.get("memory", memory)
     await indexer.upsert(
-        id=str(memory.get("id")),
-        tenant_id=str(memory.get("tenantId")),
-        user_id=str(memory.get("userId")),
-        content=str(memory.get("content", "")),
-        normalized_key=str(memory.get("normalizedKey", "")),
-        kind=memory.get("kind"),
-        importance=memory.get("importance"),
-        confidence=memory.get("confidence"),
-        project_id=memory.get("projectId"),
-        scope=memory.get("scope"),
+        id=str(payload.get("id")),
+        tenant_id=str(payload.get("tenantId") or payload.get("tenant_id")),
+        user_id=str(payload.get("userId") or payload.get("user_id")),
+        content=str(payload.get("content", "")),
+        normalized_key=str(payload.get("normalizedKey") or payload.get("normalized_key", "")),
+        kind=payload.get("kind"),
+        importance=payload.get("importance"),
+        confidence=payload.get("confidence"),
+        project_id=payload.get("projectId") or payload.get("project_id"),
+        scope=payload.get("scope"),
     )
 
 
-async def _memory_index_delete(ctx: dict[str, Any], **kwargs: Any) -> None:
+async def _memory_index_delete(ctx: dict[str, Any], *args: Any, **kwargs: Any) -> None:
     """arq 任务：删除记忆索引。"""
     indexer = ctx.get("memory_indexer")
     if not indexer:
         return
-    memory_id = kwargs.get("memoryId")
+    payload: dict[str, Any] = dict(kwargs)
+    if args and isinstance(args[0], dict):
+        payload = args[0]
+    memory_id = payload.get("memory_id") or payload.get("memoryId")
     if memory_id:
         await indexer.remove(str(memory_id))
 
@@ -138,8 +145,8 @@ class WorkerSettings:
         func(_run_job, name="resume-approval"),
         func(_run_job, name="resume-question"),
         func(_arq_memory_job, name="extract"),
-        _memory_index_upsert,
-        _memory_index_delete,
+        func(_memory_index_upsert, name="upsert"),
+        func(_memory_index_delete, name="delete"),
         _orphan_attachment_cleanup,
     ]
 
@@ -187,6 +194,15 @@ class WorkerSettings:
         database = await create_database(config.database_url)
         await migrate_database(database.pool)
         ctx["repository"] = database.repository
+
+        # LangGraph checkpointer（Postgres 持久化：审批/追问恢复、worker 重启后续跑）
+        from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+
+        checkpointer_cm = AsyncPostgresSaver.from_conn_string(config.database_url)
+        checkpointer = await checkpointer_cm.__aenter__()
+        await checkpointer.setup()
+        ctx["checkpointer"] = checkpointer
+        ctx["checkpointer_cm"] = checkpointer_cm
 
         # 孤儿 run 清理
         orphan_runs = await database.repository.fail_orphan_runs_before(
@@ -246,6 +262,7 @@ class WorkerSettings:
             "publisher": publisher,
             "artifacts": artifacts,
             "controllers": _controllers,
+            "checkpointer": checkpointer,
             "memory_queue": memory_queue,
             "memory_index": memory_indexer,
             "memory_indexer": memory_indexer,
@@ -291,7 +308,7 @@ class WorkerSettings:
 
         # abort 所有在途 run
         for controller in _controllers.values():
-            controller.set()
+            controller.abort()
 
         # 关闭 arq pool
         if memory_queue := ctx.get("memory_queue"):
@@ -301,6 +318,10 @@ class WorkerSettings:
         for key in ("redis", "publisher", "cancellation_subscriber"):
             if conn := ctx.get(key):
                 await conn.close()
+
+        # 关闭 checkpointer（独立 psycopg 连接池）
+        if checkpointer_cm := ctx.get("checkpointer_cm"):
+            await checkpointer_cm.__aexit__(None, None, None)
 
         # 关闭 DB
         if repository := ctx.get("repository"):

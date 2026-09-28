@@ -159,11 +159,13 @@ class WorkerConfig(BaseSettings):
 
     @property
     def workspace_root(self) -> str:
-        return str(Path(self.WORKSPACE_ROOT).resolve())
+        p = Path(self.WORKSPACE_ROOT)
+        return str(p if p.is_absolute() else (REPOSITORY_ROOT / p).resolve())
 
     @property
     def sandbox_sessions_root(self) -> str:
-        return str(Path(self.DOCKER_SANDBOX_SESSIONS_ROOT).resolve())
+        p = Path(self.DOCKER_SANDBOX_SESSIONS_ROOT)
+        return str(p if p.is_absolute() else (REPOSITORY_ROOT / p).resolve())
 
     @property
     def mcp_config_path(self) -> str | None:

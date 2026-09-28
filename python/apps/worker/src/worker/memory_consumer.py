@@ -8,13 +8,15 @@
 from __future__ import annotations
 
 import asyncio
+import json
+import re
 import uuid
 from typing import Any, Protocol
 
 from opentelemetry import trace
 from opentelemetry.trace import Status, StatusCode
 
-from db import MemoryJobRecord
+from db import MemoryJobRecord, MemoryRecord
 from memory_core import is_sensitive_memory
 
 
@@ -82,8 +84,78 @@ def _parse_model_output(value: Any) -> Any:
         return []
 
 
-import json
-import re
+# 严格约定输出 schema：宽松 prompt 下模型会回 {"operations":[{"key":...,"value":...}]}，
+# 导致解析后零写入。这里明确字段名（action/content/normalized_key/...）。
+EXTRACT_INSTRUCTION = (
+    "Extract durable memories worth remembering in future conversations from the latest exchange. "
+    "Return ONLY a JSON array, no prose or code fences. Each element must be: "
+    '{"action":"upsert","kind":"fact|preference|profile",'
+    '"content":"<one concise factual sentence>",'
+    '"normalized_key":"<short stable snake_case key>",'
+    '"importance":0.0-1.0,"confidence":0.0-1.0}. '
+    'To delete a previously stored memory use {"action":"remove","id":"<memory id>"}. '
+    "Ignore greetings, small talk, one-off instructions and transient context. "
+    "If nothing is worth storing, return []."
+)
+
+
+def _as_float(value: Any, default: float) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _normalize_operations(value: Any) -> list[dict[str, Any]]:
+    """把模型输出归一化为 [{'action': 'upsert'|'remove', ...}]。
+
+    兼容 {"operations": [...]} 包裹以及 action/op/type、content/text/value、
+    normalized_key/key 等常见字段别名。
+    """
+    if isinstance(value, dict):
+        for key in ("operations", "memories", "items", "data"):
+            if isinstance(value.get(key), list):
+                value = value[key]
+                break
+        else:
+            value = []
+    if not isinstance(value, list):
+        return []
+
+    result: list[dict[str, Any]] = []
+    for op in value:
+        if not isinstance(op, dict):
+            continue
+        raw_action = str(
+            op.get("action") or op.get("op") or op.get("type") or ""
+        ).lower()
+        if raw_action in ("remove", "delete"):
+            memory_id = str(op.get("id") or op.get("memory_id") or "")
+            if memory_id:
+                result.append({"action": "remove", "id": memory_id})
+            continue
+        if raw_action != "upsert":
+            continue
+        content = op.get("content")
+        if content in (None, ""):
+            content = op.get("text")
+        if content in (None, "") and isinstance(op.get("value"), (dict, list)):
+            content = json.dumps(op["value"], ensure_ascii=False)
+        elif content in (None, ""):
+            content = op.get("value", "")
+        result.append(
+            {
+                "action": "upsert",
+                "content": str(content),
+                "normalized_key": str(
+                    op.get("normalized_key") or op.get("key") or ""
+                ).strip(),
+                "kind": str(op.get("kind") or "fact"),
+                "importance": _as_float(op.get("importance"), 0.7),
+                "confidence": _as_float(op.get("confidence"), 0.9),
+            }
+        )
+    return result
 
 
 def _to_memory_message(role: str, content: str) -> dict[str, str]:
@@ -121,9 +193,9 @@ async def process_memory_job(
         )
         project_id = session.project_id if session else None
         assistant = "".join(
-            e.text
+            e.get("text", "")
             for e in events
-            if e.type in ("assistant.delta", "assistant.narration")
+            if e.get("type") in ("assistant.delta", "assistant.narration")
         )
         messages = [
             _to_memory_message("user", run.user_message),
@@ -135,25 +207,29 @@ async def process_memory_job(
         # 这里使用 memory_core 的 extract_memory_operations（若后续提供），
         # 当前先保留与 TS 一致的调用结构，使用模型直接生成 JSON。
         async def _extract(input: dict[str, Any]) -> Any:
-            response = await model.invoke(
-                [
-                    {
-                        "role": "system",
-                        "content": f"{input['instruction']} Return JSON only. The user's latest message has priority over stored facts.",
-                    },
-                    *input["messages"],
-                ]
-            )
+            payload = [
+                {
+                    "role": "system",
+                    "content": f"{input['instruction']} Return JSON only. The user's latest message has priority over stored facts.",
+                },
+                *input["messages"],
+            ]
+            # langchain ChatModel：invoke 是同步的（返回 AIMessage），异步入口是 ainvoke。
+            if hasattr(model, "ainvoke"):
+                response = await model.ainvoke(payload)
+            else:
+                response = await model.invoke(payload)
             content = response.content if hasattr(response, "content") else response
             return _parse_model_output(content)
 
-        # 简化：直接调用一次模型提取（待 memory_core 提供完整函数后替换）。
-        operations = await _extract(
+        # 直接调用一次模型提取（memory_core 暂无提取器，内联实现与 TS 行为对齐）。
+        raw_operations = await _extract(
             {
                 "messages": messages,
-                "instruction": "Extract memory operations (upsert/remove) from the conversation.",
+                "instruction": EXTRACT_INSTRUCTION,
             }
         )
+        operations = _normalize_operations(raw_operations)
 
         if metrics and hasattr(metrics, "memory_operation"):
             metrics.memory_operation(
@@ -164,31 +240,32 @@ async def process_memory_job(
 
         # consolidate_memory_operations 的简化内联实现（与 TS 行为对齐）
         # 待 memory_core 提供 consolidate_memory_operations 后可直接调用。
-        for op in operations if isinstance(operations, list) else []:
-            if not isinstance(op, dict):
-                continue
-            if op.get("action") == "upsert" or op.get("op") == "upsert":
-                content = str(op.get("content", ""))
-                if is_sensitive_memory(content):
+        for op in operations:
+            if op["action"] == "upsert":
+                content = op["content"]
+                if not content or is_sensitive_memory(content):
                     continue
                 upsert_started_at = asyncio.get_event_loop().time()
                 saved = await repository.upsert_memory(
-                    id=str(uuid.uuid4()),
-                    tenant_id=str(job.tenant_id),
-                    user_id=str(job.user_id),
-                    project_id=project_id,
-                    assistant_key="chat",
-                    scope=f"project:{project_id}" if project_id else "global",
-                    kind=op.get("kind", "preference"),
-                    content=content[:2_000],
-                    normalized_key=op.get("normalized_key", f"manual:{int(asyncio.get_event_loop().time()*1000)}"),
-                    importance=float(op.get("importance", 0.7)),
-                    confidence=float(op.get("confidence", 0.9)),
-                    status="active",
-                    source_session_id=str(job.session_id),
-                    source_run_id=str(job.run_id),
-                    supersedes_id=None,
-                    metadata={"extractor": "memory-consumer-v1"},
+                    MemoryRecord(
+                        id=str(uuid.uuid4()),
+                        tenant_id=str(job.tenant_id),
+                        user_id=str(job.user_id),
+                        project_id=project_id,
+                        assistant_key="chat",
+                        scope=f"project:{project_id}" if project_id else "global",
+                        kind=op["kind"],
+                        content=content[:2_000],
+                        normalized_key=op["normalized_key"]
+                        or f"manual:{uuid.uuid4().hex[:12]}",
+                        importance=op["importance"],
+                        confidence=op["confidence"],
+                        status="active",
+                        source_session_id=str(job.session_id),
+                        source_run_id=str(job.run_id),
+                        supersedes_id=None,
+                        metadata={"extractor": "memory-consumer-v1"},
+                    )
                 )
                 if index:
                     await index.upsert(
@@ -209,12 +286,12 @@ async def process_memory_job(
                         outcome="success",
                         duration_ms=(asyncio.get_event_loop().time() - upsert_started_at) * 1000,
                     )
-            elif op.get("action") == "remove" or op.get("op") == "remove":
-                memory_id = str(op.get("id", ""))
-                if memory_id:
-                    await repository.delete_memory(
-                        str(job.tenant_id), str(job.user_id), memory_id
-                    )
+            else:
+                # action == "remove"（归一化后仅保留带 id 的删除操作）
+                memory_id = op["id"]
+                await repository.delete_memory(
+                    str(job.tenant_id), str(job.user_id), memory_id
+                )
 
         await repository.complete_memory_job(str(job.id))
         span.set_status(Status(StatusCode.OK))
@@ -226,21 +303,31 @@ async def process_memory_job(
 
 
 # arq 任务入口（memory queue processor）
-_model_promise: Any = None
+_model_router: dict[str, _ModelLike] | None = None
+_model_router_lock = asyncio.Lock()
 
 
-async def _arq_memory_job(ctx: dict[str, Any], **_job_kwargs: Any) -> None:
-    """arq 任务函数：消费 memory queue。"""
-    global _model_promise
+async def _arq_memory_job(
+    ctx: dict[str, Any], *_args: Any, **_kwargs: Any
+) -> None:
+    """arq 任务函数：消费 memory queue。
+
+    载荷被忽略——提取目标由 DB 队列 claim_memory_job() 决定，这样 arq 重试/
+    位置或关键字传参（{"runId": ...}）都不会影响消费。
+    """
+    global _model_router
     repository: MemoryRepository = ctx["repository"]
     index: _IndexLike | None = ctx.get("index")
     metrics: Any = ctx.get("metrics")
     models: list[Any] = ctx["models"]
 
-    if _model_promise is None:
-        _model_promise = _create_resilient_model_router(models)
-    model_router = await _model_promise
-    model = model_router["primary"]
+    # 缓存的是"结果"而非协程——协程只能 await 一次，并发 job=2 时第二个 job
+    # 会复用已结束的协程报 cannot reuse already awaited coroutine。
+    if _model_router is None:
+        async with _model_router_lock:
+            if _model_router is None:
+                _model_router = await _create_resilient_model_router(models)
+    model = _model_router["primary"]
 
     claimed = await repository.claim_memory_job()
     if not claimed:
@@ -258,15 +345,39 @@ async def _arq_memory_job(ctx: dict[str, Any], **_job_kwargs: Any) -> None:
 async def _create_resilient_model_router(
     models: list[Any],
 ) -> dict[str, _ModelLike]:
-    """兼容占位：返回主模型路由器（待 agent-core 迁移后替换为真实实现）。"""
-    # agent-core 中 createResilientModelRouter 尚未迁移，这里返回一个最小可运行结构。
-    # 实际使用时应导入 agent_core 对应函数。
+    """构建记忆提取用的主模型路由。
+
+    models 是 worker.config.ModelSpec（snake_case 普通类），需要逐个转成
+    agent_core 的 ModelSpec（camelCase 别名、pydantic 模型）。
+    """
     try:
-        from agent_core import create_resilient_model_router  # type: ignore[import-not-found]
-        router = await create_resilient_model_router(models=models)
-        return {"primary": router.primary}  # type: ignore[union-attr]
-    except Exception:
-        pass
+        from agent_core import (  # type: ignore[import-not-found]
+            ModelSpec as AgentModelSpec,
+            RouterOptions,
+            create_resilient_model_router,
+        )
+
+        specs = [
+            AgentModelSpec(
+                id=m.id,
+                model=m.model,
+                provider=m.provider,
+                apiKey=m.api_key,
+                baseUrl=m.base_url,
+                maxTokens=m.max_tokens,
+            )
+            for m in models
+        ]
+        router = await create_resilient_model_router(RouterOptions(models=specs))
+        return {"primary": router.primary}  # type: ignore[dict-item]
+    except Exception as error:
+        # 不再静默：真实模型不可用时必须能在日志里看到，否则会"全部成功但零记忆"。
+        import logging
+
+        logging.getLogger("worker.memory").warning(
+            "create_resilient_model_router failed, falling back to noop model: %r",
+            error,
+        )
 
     class _PlaceholderModel:
         def __init__(self, spec: Any) -> None:

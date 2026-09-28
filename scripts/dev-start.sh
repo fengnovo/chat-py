@@ -17,9 +17,9 @@ if [ ! -f .env ]; then
 fi
 set -a; source .env; set +a
 
-PORT="${PORT:-3020}"
-API_PORT="${API_PORT:-8002}"
-KNOWLEDGE_SERVICE_PORT="${KNOWLEDGE_SERVICE_PORT:-8090}"
+PORT="${PORT:-3021}"
+API_PORT="${API_PORT:-8003}"
+KNOWLEDGE_SERVICE_PORT="${KNOWLEDGE_SERVICE_PORT:-8091}"
 
 # ── 2. 清理端口与残留进程（防多 worker 抢队列 / EADDRINUSE）─────
 echo "[dev] 清理端口 $PORT / $API_PORT / $KNOWLEDGE_SERVICE_PORT ..."
@@ -28,7 +28,7 @@ for port in "$PORT" "$API_PORT" "$KNOWLEDGE_SERVICE_PORT"; do
   [ -n "$pids" ] && echo "$pids" | xargs kill -TERM 2>/dev/null || true
 done
 # 本仓库的残留 Python 服务（worker 不监听端口，端口清理管不到它）
-for pid in $(pgrep -f 'python -m (worker\.worker|knowledge_service\.main|api\.server)' 2>/dev/null || true); do
+for pid in $(pgrep -f 'python[0-9.]* -m (worker\.worker|knowledge_service\.main|api\.server)' 2>/dev/null || true); do
   cwd=$(lsof -a -p "$pid" -d cwd -Fn 2>/dev/null | grep '^n' | sed 's/^n//' | head -1)
   case "$cwd" in
     "$REPO_ROOT"/*) kill -TERM "$pid" 2>/dev/null || true ;;
@@ -56,6 +56,15 @@ echo "[dev] 启动 infra (postgres / redis / qdrant / minio) ..."
 docker compose -f infra/compose.yaml up -d --wait
 
 # ── 5. 数据库迁移 ──────────────────────────────────────────────
+# compose 只初始化 POSTGRES_DB=agent；本项目独立使用 agent_py，缺失时自动创建
+DB_NAME="${DATABASE_URL##*/}"
+echo "[dev] 确保数据库 $DB_NAME 存在 ..."
+docker compose -f infra/compose.yaml exec -T postgres \
+  psql -U agent -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname='$DB_NAME'" \
+  | grep -q 1 \
+  || docker compose -f infra/compose.yaml exec -T postgres \
+       psql -U agent -d postgres -c "CREATE DATABASE $DB_NAME OWNER agent"
+
 echo "[dev] 数据库迁移 ..."
 (cd python && uv run --no-sync python -c "import asyncio; from db.migrate import main; asyncio.run(main())")
 

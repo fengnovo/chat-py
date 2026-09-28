@@ -12,6 +12,7 @@ dependencies = [
     "pydantic-settings>=2.7",
     "langchain",
     "langgraph",
+    "langgraph-checkpoint-postgres",
     "langfuse",
     "contracts",
     "db",

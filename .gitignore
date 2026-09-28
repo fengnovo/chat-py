@@ -40,6 +40,7 @@ id_ed25519.pub
 logs/
 *.log
 /data/
+/data-py/
 workspace/
 sessions/
 
